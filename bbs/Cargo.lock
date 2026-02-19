@@ -382,6 +382,7 @@ dependencies = [
  "ark-ff",
  "ark-poly",
  "ark-serialize",
+ "ark-std",
  "substrate-bn",
 ]
 
