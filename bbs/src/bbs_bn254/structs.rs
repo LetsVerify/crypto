@@ -58,6 +58,8 @@ pub struct BlindedCommitment {
 /// Proof of Knowledge of committed values (PoK of Committed Values)
 /// Proves that the holder knows the hidden messages inside commitment C, without revealing them
 pub struct CommitmentProof {
+    /// Commitment to randomizers T = h_0*r_s + sum h_i*r_i
+    pub t: G1,
     /// Challenge value c ∈ Fr (Fiat-Shamir hash)
     pub challenge: Scalar,
     /// Blinding factor response: s_hat = s' + c * blinding_factor
