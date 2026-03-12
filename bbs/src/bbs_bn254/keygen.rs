@@ -1,5 +1,5 @@
-/// This is the key generation module for the BBS+ signature scheme over the BN254 curve.
-/// Provides functions to generate secret keys, public keys, and key pairs for signing and verification.
+//! This is the key generation module for the BBS+ signature scheme over the BN254 curve.
+//! Provides functions to generate secret keys, public keys, and key pairs for signing and verification.
 
 use ark_bn254::{G1Affine as G1, G2Affine as G2, Fr as Scalar};
 use ark_ec::{AffineRepr, CurveGroup};

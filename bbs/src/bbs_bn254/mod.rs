@@ -1,10 +1,11 @@
 pub mod structs;
 pub mod keygen;
-pub mod user;
+pub mod blind;
+pub mod signer;
 
 pub use keygen::{keygen, keygen_with_rng};
 pub use structs::{Parameters, PrivateKey, PublicKey};
-pub use user::{
+pub use blind::{
 	blind,
 	blind_with_rng,
 	commitment_pok_prove,

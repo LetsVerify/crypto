@@ -1,3 +1,6 @@
+//! User functions impl for some user-side operations, including:
+//! blind, unblind and proof of knowledge of committed values.
+
 use ark_bn254::{G1Affine as G1, G1Projective as G1Projective, Fr as Scalar};
 use ark_ec::CurveGroup;
 use ark_ff::PrimeField;
@@ -7,20 +10,19 @@ use sha2::{Digest, Sha256};
 
 use crate::bbs_bn254::structs::{BlindedCommitment, CommitmentProof, Parameters};
 
-/// User functions impl for BBS+ signatures over BN254.
-/// Includes blind, unblind, proofgen
-
 /// Create a blinded commitment for a list of messages.
 /// Returns `Err` if message length exceeds available parameters.
-pub fn blind(params: &Parameters, messages: &[Scalar]) -> Result<BlindedCommitment, &'static str> {
+/// data with index at and behind `blind_index` will be blinded, should be between 1 and messages.len() - 1
+pub fn blind(params: &Parameters, messages: &[Scalar], blind_index: usize) -> Result<BlindedCommitment, &'static str> {
 	let mut rng = ark_std::test_rng();
-	blind_with_rng(params, messages, &mut rng)
+	blind_with_rng(params, messages, blind_index, &mut rng)
 }
 
 /// Create a blinded commitment using a caller-supplied RNG.
 pub fn blind_with_rng<R: RngCore>(
 	params: &Parameters,
 	messages: &[Scalar],
+	blind_index: usize,
 	rng: &mut R,
 ) -> Result<BlindedCommitment, &'static str> {
 	if messages.len() > params.L {
@@ -29,11 +31,17 @@ pub fn blind_with_rng<R: RngCore>(
 	if params.H.len() < messages.len() + 1 {
 		return Err("parameters do not include enough message base points");
 	}
+	if blind_index == 0 || blind_index >= messages.len() {
+		return Err("invalid blind index");
+	}
 
+	// calc r*H_1
 	let blinding_factor = Scalar::rand(rng);
 	let mut commitment = params.H[0] * blinding_factor;
-	for (i, m) in messages.iter().enumerate() {
-		commitment += params.H[i + 1] * m;
+
+	// calc m_j*H_{j+1}
+	for j in (blind_index - 1)..messages.len() {
+		commitment += params.H[j + 1] * messages[j];		
 	}
 
 	Ok(BlindedCommitment {
@@ -140,7 +148,7 @@ mod tests {
 		let messages = vec![Scalar::from(1u64), Scalar::from(2u64), Scalar::from(3u64)];
 
 		let mut rng = ark_std::test_rng();
-		let commitment = blind_with_rng(&params, &messages, &mut rng).unwrap();
+		let commitment = blind_with_rng(&params, &messages, 1, &mut rng).unwrap();
 		let proof = commitment_pok_prove_with_rng(&params, &commitment, &messages, &mut rng).unwrap();
 
 		let ok = commitment_pok_verify(&params, &commitment, &proof).unwrap();

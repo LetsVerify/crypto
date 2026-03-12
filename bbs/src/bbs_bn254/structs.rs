@@ -1,3 +1,5 @@
+//! Define the core data structures here.
+
 #![allow(non_snake_case, dead_code)]
 
 use ark_bn254::{G1Affine as G1, G2Affine as G2, Fr as Scalar};
