@@ -1,8 +1,8 @@
 //! Impl signing related functions.
 
-use ark_bn254::{G1Affine as G1, G2Affine as G2, Fr as Scalar};
+use ark_bn254::{G1Affine as G1, Fr as Scalar};
 use ark_ec::CurveGroup;
-use ark_ff::PrimeField;
+use ark_ff::{Field};
 use ark_std::{UniformRand, rand::RngCore, test_rng};
 
 use crate::bbs_bn254::{Parameters, PrivateKey, structs::Signature};
@@ -13,7 +13,7 @@ pub fn sign_no_blind(
     messages: &[Scalar]
 ) -> Result<Signature, &'static str> {
     let mut rng = test_rng();
-    sign_no_blind_with_rng(params, sk, messages, rng)
+    sign_no_blind_with_rng(params, sk, messages, &mut rng)
 }
 
 pub fn sign_no_blind_with_rng<R: RngCore>(
@@ -38,6 +38,14 @@ pub fn sign_no_blind_with_rng<R: RngCore>(
     // calc (x + e) ^ (-1)
     let mut tmp = sk.x + e;
     tmp = tmp.inverse().ok_or("failed to compute inverse")?;
-    
-    Ok(())
+
+    // calc A = C * (x + e) ^ (-1)
+    let a = (c * tmp).into_affine() as G1;
+
+    // Output signature (A, e, s)
+    Ok(Signature { 
+        A: a,
+        e, 
+        s 
+    })
 }

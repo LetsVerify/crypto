@@ -12,3 +12,4 @@ pub use blind::{
 	commitment_pok_prove_with_rng,
 	commitment_pok_verify,
 };
+pub use signer::sign_no_blind;
