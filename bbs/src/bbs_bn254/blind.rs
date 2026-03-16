@@ -8,15 +8,16 @@ use ark_serialize::CanonicalSerialize;
 use ark_std::{UniformRand, rand::RngCore};
 use sha2::{Digest, Sha256};
 
-use crate::bbs_bn254::structs::{BlindedCommitment, CommitmentProof, Parameters};
+use crate::bbs_bn254::{Signature, structs::{BlindedCommitment, CommitmentProof, Parameters}};
 
 /// Create a blinded commitment for a list of messages.
 /// Returns `Err` if message length exceeds available parameters.
-/// data with index at and behind `blind_index` will be blinded, should be between 1 and messages.len() - 1
+/// for example, if blind_index is 3, and the length of messages is 5
+/// the m0, m1, m2 are visual, while m3, m4 are blinded, the commitment will be C = r*H_0 + m3*H_4 + m4*H_5
 pub fn blind(
     params: &Parameters,
     messages: &[Scalar],
-    blind_index: usize,
+    blind_index: &usize,
 ) -> Result<BlindedCommitment, &'static str> {
     let mut rng = ark_std::test_rng();
     blind_with_rng(params, messages, blind_index, &mut rng)
@@ -26,7 +27,7 @@ pub fn blind(
 pub fn blind_with_rng<R: RngCore>(
     params: &Parameters,
     messages: &[Scalar],
-    blind_index: usize,
+    blind_index: &usize,
     rng: &mut R,
 ) -> Result<BlindedCommitment, &'static str> {
     if messages.len() > params.L {
@@ -35,7 +36,7 @@ pub fn blind_with_rng<R: RngCore>(
     if params.H.len() < messages.len() + 1 {
         return Err("parameters do not include enough message base points");
     }
-    if blind_index == 0 || blind_index >= messages.len() {
+    if *blind_index > messages.len() {
         return Err("invalid blind index");
     }
 
@@ -44,7 +45,7 @@ pub fn blind_with_rng<R: RngCore>(
     let mut commitment = params.H[0] * blinding_factor;
 
     // calc m_j*H_{j+1}
-    for j in (blind_index - 1)..messages.len() {
+    for j in *blind_index..messages.len() {
         commitment += params.H[j + 1] * messages[j];
     }
 
@@ -53,6 +54,24 @@ pub fn blind_with_rng<R: RngCore>(
         blinding_factor,
     })
 }
+
+pub fn unblind(
+	params: &Parameters,
+	signature: &Signature,
+	commitment: &BlindedCommitment,
+) -> Result<Signature, &'static str> {
+	if params.H.len() < 2 {
+		return Err("parameters do not include enough message base points");
+	}
+
+	let unblinded_s = signature.s + commitment.blinding_factor;
+	return Ok(Signature {
+		A: signature.A,
+		e: signature.e,
+		s: unblinded_s,
+	});
+}
+
 
 /// Generate a proof of knowledge for the blinded commitment.
 pub fn commitment_pok_prove(
@@ -156,7 +175,7 @@ mod tests {
         let messages = vec![Scalar::from(1u64), Scalar::from(2u64), Scalar::from(3u64)];
 
         let mut rng = ark_std::test_rng();
-        let commitment = blind_with_rng(&params, &messages, 1, &mut rng).unwrap();
+        let commitment = blind_with_rng(&params, &messages, &1, &mut rng).unwrap();
         let proof =
             commitment_pok_prove_with_rng(&params, &commitment, &messages, &mut rng).unwrap();
 

@@ -10,5 +10,5 @@ pub use blind::{
     commitment_pok_verify,
 };
 pub use keygen::{keygen, keygen_with_rng};
-pub use signer::sign_no_blind;
+pub use signer::{sign_no_blind, sign_with_blind};
 pub use structs::{Parameters, PrivateKey, PublicKey, Signature};
