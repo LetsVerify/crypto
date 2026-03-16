@@ -2,7 +2,7 @@
 
 #![allow(non_snake_case, dead_code)]
 
-use ark_bn254::{G1Affine as G1, G2Affine as G2, Fr as Scalar};
+use ark_bn254::{Fr as Scalar, G1Affine as G1, G2Affine as G2};
 
 /// BBS+ public parameters
 /// Contains the generators and message base points for the signing system
