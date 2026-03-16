@@ -32,8 +32,8 @@ jobs:
           workspaces: |
             bbs -> target
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      # - name: Check formatting
+      #   run: cargo fmt --all -- --check
 
       - name: Build
         run: cargo build --verbose

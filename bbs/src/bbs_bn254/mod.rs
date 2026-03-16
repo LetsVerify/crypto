@@ -2,8 +2,8 @@ pub mod blind;
 pub mod keygen;
 pub mod signer;
 pub mod structs;
-pub mod verify;
 pub mod utils;
+pub mod verify;
 
 pub use blind::{
     blind, blind_with_rng, commitment_pok_prove, commitment_pok_prove_with_rng,

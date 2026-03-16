@@ -16,7 +16,8 @@ mod tests {
 
         // m0, m1, m2 are visual, m3, m4 are blinded
         let visual_messages = messages[..3].to_vec();
-        let mut signature = sign_with_blind(&params, &sk, &3, &commitment.commitment, &visual_messages).unwrap();
+        let mut signature =
+            sign_with_blind(&params, &sk, &3, &commitment.commitment, &visual_messages).unwrap();
 
         signature = unblind(&params, &signature, &commitment).unwrap();
 

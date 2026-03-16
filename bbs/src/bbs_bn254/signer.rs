@@ -46,7 +46,6 @@ pub fn sign_no_blind_with_rng<R: RngCore>(
     Ok(Signature { A: a, e, s })
 }
 
-
 pub fn sign_with_blind(
     params: &Parameters,
     sk: &PrivateKey,
@@ -55,7 +54,14 @@ pub fn sign_with_blind(
     visual_messages: &[Scalar],
 ) -> Result<Signature, &'static str> {
     let mut rng = test_rng();
-    sign_with_blind_with_rng(params, sk, blind_index, commitment, visual_messages, &mut rng)
+    sign_with_blind_with_rng(
+        params,
+        sk,
+        blind_index,
+        commitment,
+        visual_messages,
+        &mut rng,
+    )
 }
 
 pub fn sign_with_blind_with_rng<R: RngCore>(
@@ -66,7 +72,7 @@ pub fn sign_with_blind_with_rng<R: RngCore>(
     visual_messages: &[Scalar],
     rng: &mut R,
 ) -> Result<Signature, &'static str> {
-    // Check 
+    // Check
     if visual_messages.len() > params.L {
         return Err("message length exceeds parameters");
     }
@@ -94,5 +100,9 @@ pub fn sign_with_blind_with_rng<R: RngCore>(
     // calc A = C' * (x + e) ^ (-1)
     let a = (c_p * tmp).into_affine() as G1;
 
-    return Ok(Signature { A: a, e, s: s_prime });
+    return Ok(Signature {
+        A: a,
+        e,
+        s: s_prime,
+    });
 }
