@@ -5,7 +5,6 @@ use ark_ec::pairing::Pairing;
 
 use crate::bbs_bn254::{Parameters, PublicKey, Signature};
 
-
 /// Verify a signature without blind.
 pub fn verify_no_blind(
     params: &Parameters,
@@ -17,7 +16,7 @@ pub fn verify_no_blind(
     if messages.len() > params.L {
         return Err("message length exceeds parameters");
     }
-    // Check points are on curve 
+    // Check points are on curve
     if !signature.A.is_on_curve() {
         return Err("signature A is not on curve");
     }

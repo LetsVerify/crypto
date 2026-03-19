@@ -8,7 +8,10 @@ use ark_serialize::CanonicalSerialize;
 use ark_std::{UniformRand, rand::RngCore};
 use sha2::{Digest, Sha256};
 
-use crate::bbs_bn254::{Signature, structs::{BlindedCommitment, CommitmentProof, Parameters}};
+use crate::bbs_bn254::{
+    Signature,
+    structs::{BlindedCommitment, CommitmentProof, Parameters},
+};
 
 /// Create a blinded commitment for a list of messages.
 /// Returns `Err` if message length exceeds available parameters.
@@ -56,22 +59,21 @@ pub fn blind_with_rng<R: RngCore>(
 }
 
 pub fn unblind(
-	params: &Parameters,
-	signature: &Signature,
-	commitment: &BlindedCommitment,
+    params: &Parameters,
+    signature: &Signature,
+    commitment: &BlindedCommitment,
 ) -> Result<Signature, &'static str> {
-	if params.H.len() < 2 {
-		return Err("parameters do not include enough message base points");
-	}
+    if params.H.len() < 2 {
+        return Err("parameters do not include enough message base points");
+    }
 
-	let unblinded_s = signature.s + commitment.blinding_factor;
-	return Ok(Signature {
-		A: signature.A,
-		e: signature.e,
-		s: unblinded_s,
-	});
+    let unblinded_s = signature.s + commitment.blinding_factor;
+    return Ok(Signature {
+        A: signature.A,
+        e: signature.e,
+        s: unblinded_s,
+    });
 }
-
 
 /// Generate a proof of knowledge for the blinded commitment.
 pub fn commitment_pok_prove(
