@@ -1,9 +1,12 @@
 //! Some useful tool funcs
 
-#![allow(non_snake_case)]
+#![allow(non_snake_case, dead_code)]
 
-use crate::bbs_bn254::structs::Parameters;
-use ark_bn254::{Fq, Fq2, G1Affine as G1, G2Affine as G2};
+use crate::bbs_bn254::{
+    PrivateKey,
+    structs::{Parameters, Signature},
+};
+use ark_bn254::{Fq, Fq2, Fr as Scalar, G1Affine as G1, G2Affine as G2};
 use serde::{Deserialize, Serialize};
 use serde_json::{from_str, json};
 use std::str::FromStr;
@@ -51,6 +54,13 @@ struct ParametersJson {
     H: Vec<G1Json>,
 }
 
+#[derive(Serialize, Deserialize)]
+struct SignatureJson {
+    A: G1Json,
+    e: String,
+    s: String,
+}
+
 fn g1_to_json(p: &G1) -> G1Json {
     G1Json {
         x: p.x.to_string(),
@@ -62,6 +72,37 @@ fn g1_from_json(p: &G1Json, field: &'static str) -> Result<G1, ParamsJsonError> 
     let x = Fq::from_str(&p.x).map_err(|_| ParamsJsonError::InvalidField(field))?;
     let y = Fq::from_str(&p.y).map_err(|_| ParamsJsonError::InvalidField(field))?;
     Ok(G1::new_unchecked(x, y))
+}
+
+fn fq2_to_json(p: &Fq2) -> Fq2Json {
+    Fq2Json {
+        c0: p.c0.to_string(),
+        c1: p.c1.to_string(),
+    }
+}
+
+fn fq2_from_json(p: &Fq2Json, field: &'static str) -> Result<Fq2, ParamsJsonError> {
+    let c0 = Fq::from_str(&p.c0).map_err(|_| ParamsJsonError::InvalidField(field))?;
+    let c1 = Fq::from_str(&p.c1).map_err(|_| ParamsJsonError::InvalidField(field))?;
+    Ok(Fq2::new(c0, c1))
+}
+
+fn g2_to_json(p: &G2) -> G2Json {
+    G2Json {
+        x: fq2_to_json(&p.x),
+        y: fq2_to_json(&p.y),
+    }
+}
+
+fn g2_from_json(p: &G2Json, field: &'static str) -> Result<G2, ParamsJsonError> {
+    let x_c0 = Fq::from_str(&p.x.c0).map_err(|_| ParamsJsonError::InvalidField(field))?;
+    let x_c1 = Fq::from_str(&p.x.c1).map_err(|_| ParamsJsonError::InvalidField(field))?;
+    let y_c0 = Fq::from_str(&p.y.c0).map_err(|_| ParamsJsonError::InvalidField(field))?;
+    let y_c1 = Fq::from_str(&p.y.c1).map_err(|_| ParamsJsonError::InvalidField(field))?;
+    Ok(G2::new_unchecked(
+        Fq2::new(x_c0, x_c1),
+        Fq2::new(y_c0, y_c1),
+    ))
 }
 
 impl Parameters {
@@ -99,16 +140,7 @@ impl Parameters {
 
         let g1 = g1_from_json(&decoded.g1, "g1")?;
 
-        let g2_x_c0 =
-            Fq::from_str(&decoded.g2.x.c0).map_err(|_| ParamsJsonError::InvalidField("g2.x.c0"))?;
-        let g2_x_c1 =
-            Fq::from_str(&decoded.g2.x.c1).map_err(|_| ParamsJsonError::InvalidField("g2.x.c1"))?;
-        let g2_y_c0 =
-            Fq::from_str(&decoded.g2.y.c0).map_err(|_| ParamsJsonError::InvalidField("g2.y.c0"))?;
-        let g2_y_c1 =
-            Fq::from_str(&decoded.g2.y.c1).map_err(|_| ParamsJsonError::InvalidField("g2.y.c1"))?;
-
-        let g2 = G2::new_unchecked(Fq2::new(g2_x_c0, g2_x_c1), Fq2::new(g2_y_c0, g2_y_c1));
+        let g2 = g2_from_json(&decoded.g2, "g2")?;
 
         let mut H = Vec::with_capacity(decoded.H.len());
         for item in &decoded.H {
@@ -117,9 +149,56 @@ impl Parameters {
 
         Ok(Parameters { L, g1, g2, H })
     }
+}
 
-    // 兼容旧调用：需要时可保留
-    pub fn load_from_json_panic(s: &str) -> Self {
-        Self::load_from_json(s).expect("failed to parse parameters json")
+impl Signature {
+    pub fn export_to_json(&self) -> String {
+        let res = json!({
+            "A": {
+                "x": self.A.x.to_string(),
+                "y": self.A.y.to_string(),
+            },
+            "e": self.e.to_string(),
+            "s": self.s.to_string(),
+        });
+
+        res.to_string()
+    }
+
+    pub fn load_from_json(s: &str) -> Result<Self, ParamsJsonError> {
+        let decoded: SignatureJson =
+            from_str(s).map_err(|e| ParamsJsonError::InvalidJson(e.to_string()))?;
+
+        let A = g1_from_json(&decoded.A, "A")?;
+        let e = decoded
+            .e
+            .parse::<Scalar>()
+            .map_err(|_| ParamsJsonError::InvalidField("e"))?;
+        let s = decoded
+            .s
+            .parse::<Scalar>()
+            .map_err(|_| ParamsJsonError::InvalidField("s"))?;
+
+        Ok(Signature { A, e, s })
+    }
+}
+
+impl PrivateKey {
+    pub fn export_to_json(&self) -> String {
+        json!({
+            "x": self.x.to_string(),
+        })
+        .to_string()
+    }
+
+    pub fn load_from_json(s: &str) -> Result<Self, ParamsJsonError> {
+        let decoded: serde_json::Value =
+            from_str(s).map_err(|e| ParamsJsonError::InvalidJson(e.to_string()))?;
+        let x_str = decoded
+            .get("x")
+            .and_then(|v| v.as_str())
+            .ok_or(ParamsJsonError::InvalidField("x"))?;
+        let x = Scalar::from_str(x_str).unwrap();
+        Ok(PrivateKey { x })
     }
 }
