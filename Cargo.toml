@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "bbs",
+    "bbs_wasm",
+]
+
+resolver = "3"
