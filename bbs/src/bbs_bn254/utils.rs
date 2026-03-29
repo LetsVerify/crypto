@@ -47,6 +47,11 @@ struct G2Json {
 }
 
 #[derive(Serialize, Deserialize)]
+struct PublicKeyJson {
+    w: G2Json,
+}
+
+#[derive(Serialize, Deserialize)]
 struct ParametersJson {
     L: String,
     g1: G1Json,
