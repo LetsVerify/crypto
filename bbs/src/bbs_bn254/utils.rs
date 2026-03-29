@@ -3,8 +3,8 @@
 #![allow(non_snake_case, dead_code)]
 
 use crate::bbs_bn254::{
-    PrivateKey,
-    structs::{Parameters, Signature},
+    PrivateKey, PublicKey,
+    structs::{BlindedCommitment, Parameters, Signature},
 };
 use ark_bn254::{Fq, Fq2, Fr as Scalar, G1Affine as G1, G2Affine as G2};
 use serde::{Deserialize, Serialize};
@@ -44,6 +44,11 @@ struct Fq2Json {
 struct G2Json {
     x: Fq2Json,
     y: Fq2Json,
+}
+
+#[derive(Serialize, Deserialize)]
+struct PublicKeyJson {
+    w: G2Json,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -129,6 +134,41 @@ impl Parameters {
         res.to_string()
     }
 
+    pub fn export_to_obj(&self) -> serde_json::Value {
+        json!({
+            "L": self.L.to_string(),
+            "g1": {
+                "x": self.g1.x.to_string(),
+                "y": self.g1.y.to_string(),
+            },
+            "g2": {
+                "x": {
+                    "c0": self.g2.x.c0.to_string(),
+                    "c1": self.g2.x.c1.to_string(),
+                },
+                "y": {
+                    "c0": self.g2.y.c0.to_string(),
+                    "c1": self.g2.y.c1.to_string(),
+                },
+            },
+            "H": self.H.iter().map(g1_to_json).collect::<Vec<_>>()
+        })
+    }
+
+    pub fn export(&self) -> String {
+        let res = json!({
+            "L": self.L,
+            "H": self.H.iter().map(|h| {
+                json!({
+                    "x": h.x.to_string(),
+                    "y": h.y.to_string(),
+                })
+            }).collect::<Vec<_>>()
+        });
+
+        format!("{}", res)
+    }
+
     pub fn load_from_json(s: &str) -> Result<Self, ParamsJsonError> {
         let decoded: ParametersJson =
             from_str(s).map_err(|e| ParamsJsonError::InvalidJson(e.to_string()))?;
@@ -165,6 +205,22 @@ impl Signature {
         res.to_string()
     }
 
+    pub fn export_to_obj(&self) -> serde_json::Value {
+        json!({
+            "A": {
+                "x": self.A.x.to_string(),
+                "y": self.A.y.to_string(),
+            },
+            "e": self.e.to_string(),
+            "s": self.s.to_string(),
+        })
+    }
+
+    pub fn export(&self) -> String {
+        format!("(({},{}), {}, {})", self.A.x, self.A.y, self.e, self.s)
+
+    }
+
     pub fn load_from_json(s: &str) -> Result<Self, ParamsJsonError> {
         let decoded: SignatureJson =
             from_str(s).map_err(|e| ParamsJsonError::InvalidJson(e.to_string()))?;
@@ -191,6 +247,15 @@ impl PrivateKey {
         .to_string()
     }
 
+    pub fn export_to_obj(&self) -> serde_json::Value {
+        json!({
+            "x": self.x.to_string(),
+        })
+    }
+
+    pub fn export(&self) -> String {
+        format!("{}", self.x)
+    }
     pub fn load_from_json(s: &str) -> Result<Self, ParamsJsonError> {
         let decoded: serde_json::Value =
             from_str(s).map_err(|e| ParamsJsonError::InvalidJson(e.to_string()))?;
@@ -201,4 +266,175 @@ impl PrivateKey {
         let x = Scalar::from_str(x_str).unwrap();
         Ok(PrivateKey { x })
     }
+}
+
+impl PublicKey {
+    pub fn export_to_json(&self) -> String {
+        let res = json!({
+            "w": {
+                "x": {
+                    "c0": self.w.x.c0.to_string(),
+                    "c1": self.w.x.c1.to_string(),
+                },
+                "y": {
+                    "c0": self.w.y.c0.to_string(),
+                    "c1": self.w.y.c1.to_string(),
+                },
+            }
+        });
+        res.to_string()
+    }
+
+    pub fn export_to_obj(&self) -> serde_json::Value {
+        json!({
+            "w": {
+                "x": {
+                    "c0": self.w.x.c0.to_string(),
+                    "c1": self.w.x.c1.to_string(),
+                },
+                "y": {
+                    "c0": self.w.y.c0.to_string(),
+                    "c1": self.w.y.c1.to_string(),
+                },
+            }
+        })
+    }
+    pub fn export(&self) -> String {
+        let res = json!({
+            "w": {
+                "x": [
+                    self.w.x.c0.to_string(),
+                    self.w.x.c1.to_string()
+                ],
+                "y": [
+                    self.w.y.c0.to_string(),
+                    self.w.y.c1.to_string()
+                ]
+            }
+        });
+
+        format!("{}", res)
+    }
+
+    pub fn load_from_json(s: &str) -> Result<Self, ParamsJsonError> {
+        let decoded: PublicKeyJson =
+            from_str(s).map_err(|e| ParamsJsonError::InvalidJson(e.to_string()))?;
+        let w = g2_from_json(&decoded.w, "w")?;
+        Ok(PublicKey { w })
+    }
+}
+
+impl BlindedCommitment {
+    pub fn export(&self) -> String {
+        let res = json!({
+            "commitment": {
+                "x": self.commitment.x.to_string(),
+                "y": self.commitment.y.to_string(),
+            },
+            "blinding_factor": self.blinding_factor.to_string(),
+        });
+
+        format!("{}", res)
+    }
+
+    pub fn export_to_json(&self) -> String {
+        let res = json!({
+            "commitment": {
+                "x": self.commitment.x.to_string(),
+                "y": self.commitment.y.to_string(),
+            },
+            "blinding_factor": self.blinding_factor.to_string(),
+        });
+
+        res.to_string()
+    }
+
+    pub fn export_to_obj(&self) -> serde_json::Value {
+        json!({
+            "commitment": {
+                "x": self.commitment.x.to_string(),
+                "y": self.commitment.y.to_string(),
+            },
+            "blinding_factor": self.blinding_factor.to_string(),
+        })
+    }
+
+    pub fn load_from_json(s: &str) -> Result<Self, ParamsJsonError> {
+        let decoded: serde_json::Value =
+            from_str(s).map_err(|e| ParamsJsonError::InvalidJson(e.to_string()))?;
+
+        let commitment_json = decoded
+            .get("commitment")
+            .ok_or(ParamsJsonError::InvalidField("commitment"))?;
+        let commitment = g1_from_json(
+            &G1Json {
+                x: commitment_json
+                    .get("x")
+                    .and_then(|v| v.as_str())
+                    .ok_or(ParamsJsonError::InvalidField("commitment.x"))?
+                    .to_string(),
+                y: commitment_json
+                    .get("y")
+                    .and_then(|v| v.as_str())
+                    .ok_or(ParamsJsonError::InvalidField("commitment.y"))?
+                    .to_string(),
+            },
+            "commitment",
+        )?;
+
+        let blinding_factor_str = decoded
+            .get("blinding_factor")
+            .and_then(|v| v.as_str())
+            .ok_or(ParamsJsonError::InvalidField("blinding_factor"))?;
+        let blinding_factor =
+            Scalar::from_str(blinding_factor_str).map_err(|_| ParamsJsonError::InvalidField("blinding_factor"))?;
+
+        Ok(BlindedCommitment {
+            commitment,
+            blinding_factor,
+        })
+    }
+}
+
+pub struct Mess;
+impl Mess {
+    pub fn export(messages: &[Scalar]) -> String {
+        let exported: Vec<String> = messages.iter().map(|m| m.to_string()).collect();
+        format!("[{}]", exported.join(", "))
+    }
+}
+
+pub trait G1Ext {
+    fn export(&self) -> String;
+    fn export_to_obj(&self) -> serde_json::Value;
+    fn load_from_json(s: &str) -> Result<G1, ParamsJsonError>;
+}
+
+impl G1Ext for G1 {
+    fn export(&self) -> String {
+        json!({
+            "x": self.x.to_string(),
+            "y": self.y.to_string(),
+        })
+        .to_string()
+    }
+
+    fn export_to_obj(&self) -> serde_json::Value {
+        json!({
+            "x": self.x.to_string(),
+            "y": self.y.to_string(),
+        })
+    }
+
+    fn load_from_json(s: &str) -> Result<Self, ParamsJsonError> {
+        let decoded: G1Json =
+        from_str(s).map_err(|e| ParamsJsonError::InvalidJson(e.to_string()))?;
+        g1_from_json(&decoded, "g1")
+    }
+}
+
+pub fn load_g1_from_json(s: &str) -> Result<G1, ParamsJsonError> {
+    let decoded: G1Json =
+        from_str(s).map_err(|e| ParamsJsonError::InvalidJson(e.to_string()))?;
+    g1_from_json(&decoded, "g1")
 }
