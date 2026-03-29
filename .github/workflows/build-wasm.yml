@@ -1,0 +1,47 @@
+name: Build Wasm
+
+"on":
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: Build and test signer
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bbs
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+     
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+    
+        
+      - name: Cache cargo registry and build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            bbs_wasm -> target
+
+      # - name: Check formattingw
+      #   run: cargo fmt --all -- --check
+      - name: Test
+        run: cargo test
+        
+      - name: Build
+        run: wasm-pack build --target web
+
+

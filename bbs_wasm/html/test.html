@@ -1,0 +1,129 @@
+<!doctype html>
+<html>
+<body>
+<script type="module">
+    import init, {
+        bbs_keygen,
+        sign_no_blind,
+        verify,
+        blind,
+        sign_with_blind,
+        unblind,
+    } from "../pkg/bbs_wasm.js";
+
+    function buildMessages(L) {
+        return Array.from({ length: L }, (_, i) => String(i + 1));
+    }
+
+    // blind() 返回 BlindedCommitment，sign_with_blind 需要 G1 点
+    function extractCommitmentG1(blindedCommitmentObj) {
+        if (blindedCommitmentObj?.x && blindedCommitmentObj?.y) return blindedCommitmentObj;
+        if (blindedCommitmentObj?.commitment?.x && blindedCommitmentObj?.commitment?.y) {
+            return blindedCommitmentObj.commitment;
+        }
+        return null;
+    }
+
+    function splitMessagesByBlindIndex(messages, blindIndex) {
+        // 正确语义：
+        // visible: [0, blindIndex)
+        // blinded: [blindIndex, L)
+        return {
+            visibleMessages: messages.slice(0, blindIndex),
+            blindedMessages: messages.slice(blindIndex),
+        };
+    }
+
+    async function runBlindBoundaryTest(L = 5, blindIndex = 2) {
+        await init();
+
+        if (blindIndex < 0 || blindIndex > L) {
+            throw new Error(`invalid blindIndex=${blindIndex}, expected 0..${L}`);
+        }
+
+        const keygenRes = bbs_keygen(L);
+        const { params, pk, sk } = keygenRes;
+        if (!params || !pk || !sk) {
+            throw new Error("bbs_keygen 返回缺少 params/pk/sk，请先修复 wasm 导出结构");
+        }
+
+        const messages = buildMessages(L);
+        const { visibleMessages, blindedMessages } = splitMessagesByBlindIndex(messages, blindIndex);
+
+        // 1) 用户侧：对 [blindIndex..L) 这段做盲化承诺
+        const blindedCommitment = blind(params, messages, blindIndex);
+
+        // 2) 签名侧：只拿可见消息 [0..blindIndex)
+        const commitmentG1 = extractCommitmentG1(blindedCommitment);
+        if (!commitmentG1) throw new Error("blind() 返回里未找到 commitment G1");
+
+        // 3) 盲签
+        const blindedSig = sign_with_blind(
+            params,
+            sk,
+            blindIndex,
+            visibleMessages,
+            commitmentG1
+        );
+
+        // 4) 用户反盲化
+        const sig = unblind(params, blindedSig, blindedCommitment);
+
+        // 5) 全量消息验签
+        const ok = verify(params, pk, messages, sig);
+
+        // 篡改“盲化区”消息，应失败
+        const tamperedHidden = [...messages];
+        if (blindIndex < L) tamperedHidden[blindIndex] = "999";
+        const badHidden = verify(params, pk, tamperedHidden, sig);
+
+        // 篡改“可见区”消息，应失败
+        const tamperedVisible = [...messages];
+        if (blindIndex > 0) tamperedVisible[0] = "888";
+        const badVisible = verify(params, pk, tamperedVisible, sig);
+
+        const result = {
+            L,
+            blindIndex,
+            visibleMessages, // [0..blindIndex)
+            blindedMessages, // [blindIndex..L)
+            ok,
+            tampered_hidden_should_fail: badHidden,
+            tampered_visible_should_fail: badVisible,
+        };
+
+        console.log("[BLIND_BOUNDARY_TEST]", result);
+        return result;
+    }
+
+    async function runNoBlindTest(L = 5) {
+        await init();
+
+        const { params, pk, sk } = bbs_keygen(L);
+        const messages = buildMessages(L);
+
+        const sig = sign_no_blind(params, sk, messages);
+        const ok = verify(params, pk, messages, sig);
+
+        const tampered = [...messages];
+        tampered[0] = "777";
+        const bad = verify(params, pk, tampered, sig);
+
+        const result = { L, ok, tampered_should_fail: bad };
+        console.log("[NO_BLIND_TEST]", result);
+        return result;
+    }
+
+    async function runAll() {
+        const noBlind = await runNoBlindTest(5);
+        const blind = await runBlindBoundaryTest(5, 2);
+        return { noBlind, blind };
+    }
+
+    globalThis.runNoBlindTest = runNoBlindTest;
+    globalThis.runBlindBoundaryTest = runBlindBoundaryTest;
+    globalThis.runAll = runAll;
+    globalThis.wasmReady = runAll();
+</script>
+</body>
+</html>
