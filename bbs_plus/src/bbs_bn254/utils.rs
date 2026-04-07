@@ -4,7 +4,7 @@
 
 use crate::bbs_bn254::{
     PrivateKey, PublicKey,
-    structs::{BlindedCommitment, Parameters, Signature},
+    structs::{BlindedCommitment, CommitmentProof, Parameters, Signature},
 };
 use ark_bn254::{Fq, Fq2, Fr as Scalar, G1Affine as G1, G2Affine as G2};
 use serde::{Deserialize, Serialize};
@@ -64,6 +64,20 @@ struct SignatureJson {
     A: G1Json,
     e: String,
     s: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct BlindedCommitmentJson {
+    commitment: G1Json,
+    blinding_factor: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct CommitmentProofJson {
+    t: G1Json,
+    challenge: String,
+    s_hat: String,
+    m_hats: Vec<String>,
 }
 
 fn g1_to_json(p: &G1) -> G1Json {
@@ -437,4 +451,48 @@ pub fn load_g1_from_json(s: &str) -> Result<G1, ParamsJsonError> {
     let decoded: G1Json =
         from_str(s).map_err(|e| ParamsJsonError::InvalidJson(e.to_string()))?;
     g1_from_json(&decoded, "g1")
+}
+
+
+impl CommitmentProof {
+    pub fn export_to_json(&self) -> String {
+        json!({
+            "t": {
+                "x": self.t.x.to_string(),
+                "y": self.t.y.to_string(),
+            },
+            "challenge": self.challenge.to_string(),
+            "s": self.s_hat.to_string(),
+            "m_hats": self.m_hats.iter().map(|m_hat| m_hat.to_string()).collect::<Vec<_>>(),
+        })
+        .to_string()
+    }
+
+    pub fn export_to_obj(&self) -> serde_json::Value {
+        json!({
+            "t": {
+                "x": self.t.x.to_string(),
+                "y": self.t.y.to_string(),
+            },
+            "challenge": self.challenge.to_string(),
+            "s": self.s_hat.to_string(),
+            "m_hats": self.m_hats.iter().map(|m_hat| m_hat.to_string()).collect::<Vec<_>>(),
+        })
+    }
+    
+        pub fn load_from_json(s: &str) -> Result<Self, ParamsJsonError> {
+            let decoded: CommitmentProofJson = from_str(s).map_err(|e| ParamsJsonError::InvalidJson(e.to_string()))?;
+            let mut m_hats_vec: Vec<Scalar> = Vec::with_capacity(decoded.m_hats.len());
+            for (i, m_hat_str) in decoded.m_hats.iter().enumerate() {
+                let m_hat = m_hat_str.parse::<Scalar>().map_err(|_| ParamsJsonError::InvalidJson(format!("m_hats[{}]", i)))?;
+                m_hats_vec.push(m_hat);
+            }
+            
+            Ok(CommitmentProof {
+                t: g1_from_json(&decoded.t, "t")?,
+                challenge: decoded.challenge.parse::<Scalar>().map_err(|_| ParamsJsonError::InvalidField("challenge"))?,
+                s_hat: decoded.s_hat.parse::<Scalar>().map_err(|_| ParamsJsonError::InvalidField("s_hat"))?,
+                m_hats: m_hats_vec
+            })
+        }
 }

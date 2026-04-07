@@ -15,6 +15,6 @@ console_error_panic_hook = "0.1"
 getrandom = { version = "0.2", features = ["core", "js"] }
 rand = "0.8"
 
-bbs = { path = "../bbs" }
+bbs = { path = "../bbs_plus" }
 ark-bn254 = "0.5.0"
 serde_json = "1.0.149"

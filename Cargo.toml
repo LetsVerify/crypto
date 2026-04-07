@@ -1,7 +1,8 @@
 [workspace]
 members = [
     "bbs",
-    "bbs_wasm",
+    "bbs_plus",
+    "bbs_plus_wasm",
 ]
 
 resolver = "3"
