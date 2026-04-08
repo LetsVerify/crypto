@@ -232,7 +232,6 @@ impl Signature {
 
     pub fn export(&self) -> String {
         format!("(({},{}), {}, {})", self.A.x, self.A.y, self.e, self.s)
-
     }
 
     pub fn load_from_json(s: &str) -> Result<Self, ParamsJsonError> {
@@ -400,8 +399,8 @@ impl BlindedCommitment {
             .get("blinding_factor")
             .and_then(|v| v.as_str())
             .ok_or(ParamsJsonError::InvalidField("blinding_factor"))?;
-        let blinding_factor =
-            Scalar::from_str(blinding_factor_str).map_err(|_| ParamsJsonError::InvalidField("blinding_factor"))?;
+        let blinding_factor = Scalar::from_str(blinding_factor_str)
+            .map_err(|_| ParamsJsonError::InvalidField("blinding_factor"))?;
 
         Ok(BlindedCommitment {
             commitment,
@@ -442,17 +441,15 @@ impl G1Ext for G1 {
 
     fn load_from_json(s: &str) -> Result<Self, ParamsJsonError> {
         let decoded: G1Json =
-        from_str(s).map_err(|e| ParamsJsonError::InvalidJson(e.to_string()))?;
+            from_str(s).map_err(|e| ParamsJsonError::InvalidJson(e.to_string()))?;
         g1_from_json(&decoded, "g1")
     }
 }
 
 pub fn load_g1_from_json(s: &str) -> Result<G1, ParamsJsonError> {
-    let decoded: G1Json =
-        from_str(s).map_err(|e| ParamsJsonError::InvalidJson(e.to_string()))?;
+    let decoded: G1Json = from_str(s).map_err(|e| ParamsJsonError::InvalidJson(e.to_string()))?;
     g1_from_json(&decoded, "g1")
 }
-
 
 impl CommitmentProof {
     pub fn export_to_json(&self) -> String {
@@ -479,20 +476,29 @@ impl CommitmentProof {
             "m_hats": self.m_hats.iter().map(|m_hat| m_hat.to_string()).collect::<Vec<_>>(),
         })
     }
-    
-        pub fn load_from_json(s: &str) -> Result<Self, ParamsJsonError> {
-            let decoded: CommitmentProofJson = from_str(s).map_err(|e| ParamsJsonError::InvalidJson(e.to_string()))?;
-            let mut m_hats_vec: Vec<Scalar> = Vec::with_capacity(decoded.m_hats.len());
-            for (i, m_hat_str) in decoded.m_hats.iter().enumerate() {
-                let m_hat = m_hat_str.parse::<Scalar>().map_err(|_| ParamsJsonError::InvalidJson(format!("m_hats[{}]", i)))?;
-                m_hats_vec.push(m_hat);
-            }
-            
-            Ok(CommitmentProof {
-                t: g1_from_json(&decoded.t, "t")?,
-                challenge: decoded.challenge.parse::<Scalar>().map_err(|_| ParamsJsonError::InvalidField("challenge"))?,
-                s_hat: decoded.s_hat.parse::<Scalar>().map_err(|_| ParamsJsonError::InvalidField("s_hat"))?,
-                m_hats: m_hats_vec
-            })
+
+    pub fn load_from_json(s: &str) -> Result<Self, ParamsJsonError> {
+        let decoded: CommitmentProofJson =
+            from_str(s).map_err(|e| ParamsJsonError::InvalidJson(e.to_string()))?;
+        let mut m_hats_vec: Vec<Scalar> = Vec::with_capacity(decoded.m_hats.len());
+        for (i, m_hat_str) in decoded.m_hats.iter().enumerate() {
+            let m_hat = m_hat_str
+                .parse::<Scalar>()
+                .map_err(|_| ParamsJsonError::InvalidJson(format!("m_hats[{}]", i)))?;
+            m_hats_vec.push(m_hat);
         }
+
+        Ok(CommitmentProof {
+            t: g1_from_json(&decoded.t, "t")?,
+            challenge: decoded
+                .challenge
+                .parse::<Scalar>()
+                .map_err(|_| ParamsJsonError::InvalidField("challenge"))?,
+            s_hat: decoded
+                .s_hat
+                .parse::<Scalar>()
+                .map_err(|_| ParamsJsonError::InvalidField("s_hat"))?,
+            m_hats: m_hats_vec,
+        })
+    }
 }

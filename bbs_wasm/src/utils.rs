@@ -1,9 +1,9 @@
 #![allow(non_snake_case, dead_code)]
 
 use ark_bn254::{Fq, Fq2, Fr as Scalar, G1Affine as G1, G2Affine as G2};
+use bbs::structs::{Messages, Params, PrivateKey, PublicKey, Signature};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use bbs::structs::{Messages, Params, PrivateKey, PublicKey, Signature};
 
 pub fn set_panic_hook() {
     // When the `console_error_panic_hook` feature is enabled, we can call the
@@ -99,7 +99,11 @@ impl TryFrom<&ParamsJson> for Params {
             G1: g1_from_json(&dto.G1)?,
             G2: g2_from_json(&dto.G2)?,
             L: dto.L,
-            H: dto.H.iter().map(g1_from_json).collect::<Result<Vec<_>, _>>()?,
+            H: dto
+                .H
+                .iter()
+                .map(g1_from_json)
+                .collect::<Result<Vec<_>, _>>()?,
         })
     }
 }
@@ -181,7 +185,11 @@ impl From<&Messages> for MessagesJson {
 impl TryFrom<&MessagesJson> for Messages {
     type Error = String;
     fn try_from(dto: &MessagesJson) -> Result<Self, Self::Error> {
-        let scalars = dto.0.iter().map(|s| Scalar::from_str(s).map_err(|_| format!("Invalid scalar {}", s))).collect::<Result<Vec<_>, _>>()?;
+        let scalars = dto
+            .0
+            .iter()
+            .map(|s| Scalar::from_str(s).map_err(|_| format!("Invalid scalar {}", s)))
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Messages(scalars))
     }
 }
@@ -219,7 +227,11 @@ impl TryFrom<&NonInteractiveProofPrefixJson> for NonInteractiveProofPrefix {
             U: g1_from_json(&dto.U)?,
             s: Scalar::from_str(&dto.s).map_err(|_| "Invalid s")?,
             t: Scalar::from_str(&dto.t).map_err(|_| "Invalid t")?,
-            u_i: dto.u_i.iter().map(|s| Scalar::from_str(s).map_err(|_| "Invalid u_i")).collect::<Result<Vec<_>, _>>()?,
+            u_i: dto
+                .u_i
+                .iter()
+                .map(|s| Scalar::from_str(s).map_err(|_| "Invalid u_i"))
+                .collect::<Result<Vec<_>, _>>()?,
         })
     }
 }

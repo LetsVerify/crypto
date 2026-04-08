@@ -2,10 +2,10 @@
 
 #![allow(non_snake_case)]
 use ark_bn254::{Bn254, Fr as Scalar, G1Affine as G1};
-use ark_ec::pairing::Pairing;
 use ark_ec::CurveGroup;
+use ark_ec::pairing::Pairing;
 use ark_ff::PrimeField;
-use ark_std::{rand::RngCore, UniformRand, Zero};
+use ark_std::{UniformRand, Zero, rand::RngCore};
 use std::collections::{HashMap, HashSet};
 
 use crate::pub_use::*;
@@ -80,7 +80,8 @@ pub fn pok_commit<R: RngCore>(
     }
 
     let l = messages.0.len();
-    let hidden_indices: HashSet<usize> = (0..l).filter(|i| !disclosed_indices.contains(i)).collect();
+    let hidden_indices: HashSet<usize> =
+        (0..l).filter(|i| !disclosed_indices.contains(i)).collect();
 
     // 1. r <- Z_p*
     let mut r = Scalar::rand(rng);
@@ -150,7 +151,7 @@ pub fn pok_prove(state: &InteractiveProverState, challenge: &Challenge) -> PoKRe
     let c = *challenge;
     let s = state.alpha + state.r * c;
     let t = state.beta - state.e * c;
-    
+
     let mut u_i = HashMap::new();
     for &i in &state.hidden_indices {
         let delta_i = state.deltas.get(&i).unwrap();
@@ -172,7 +173,7 @@ pub fn pok_verify(
     response: &PoKResponse,
 ) -> bool {
     let c_j = compute_c_j(params, disclosed);
-    
+
     // 1. Pairing check: e(A_bar, X) == e(B_bar, G2)
     let left_pairing = Bn254::pairing(commitment.A_bar, pk.X);
     let right_pairing = Bn254::pairing(commitment.B_bar, params.G2);
@@ -182,16 +183,16 @@ pub fn pok_verify(
 
     // 2. Homomorphic check: U + c * B_bar == s * C_J + t * A_bar + sum(u_i * H_i)
     let lhs = (commitment.U.into_group() + commitment.B_bar * challenge).into_affine();
-    
+
     let mut sum_ui_hi = params.G1.into_group() * Scalar::zero();
     for (&i, u_i) in response.u_i.iter() {
         if i < params.L {
             sum_ui_hi += params.H[i] * u_i;
         }
     }
-    
+
     let rhs = (c_j * response.s + commitment.A_bar * response.t + sum_ui_hi).into_affine();
-    
+
     lhs == rhs
 }
 
@@ -206,36 +207,38 @@ fn compute_challenge(
 ) -> Scalar {
     let mut hasher = Keccak256::new();
     hasher.update(POK_CTX);
-    
+
     // Convert components to bytes appropriately (this is simplified, ideal uses CanonicalSerialize)
     use ark_serialize::CanonicalSerialize;
-    
+
     let mut pk_bytes = Vec::new();
     pk.X.serialize_compressed(&mut pk_bytes).unwrap_or_default();
     hasher.update(&pk_bytes);
-    
+
     // Sort disclosed messages by index to ensure deterministic hashing
     let mut indices: Vec<_> = disclosed.keys().cloned().collect();
     indices.sort_unstable();
     for i in indices {
         hasher.update(&(i as u64).to_be_bytes());
         let mut m_bytes = Vec::new();
-        disclosed[&i].serialize_compressed(&mut m_bytes).unwrap_or_default();
+        disclosed[&i]
+            .serialize_compressed(&mut m_bytes)
+            .unwrap_or_default();
         hasher.update(&m_bytes);
     }
-    
+
     let mut a_bytes = Vec::new();
     a_bar.serialize_compressed(&mut a_bytes).unwrap_or_default();
     hasher.update(&a_bytes);
-    
+
     let mut b_bytes = Vec::new();
     b_bar.serialize_compressed(&mut b_bytes).unwrap_or_default();
     hasher.update(&b_bytes);
-    
+
     let mut u_bytes = Vec::new();
     u.serialize_compressed(&mut u_bytes).unwrap_or_default();
     hasher.update(&u_bytes);
-    
+
     let hash_result = hasher.finalize();
     // Convert hash to scalar
     Scalar::from_be_bytes_mod_order(&hash_result)
@@ -251,7 +254,7 @@ pub fn nizk_prove<R: RngCore>(
     rng: &mut R,
 ) -> Result<NonInteractiveProof, &'static str> {
     let (commitment, state) = pok_commit(params, messages, signature, disclosed_indices, rng)?;
-    
+
     let l = messages.0.len();
     let mut disclosed_msgs = HashMap::new();
     for &j in disclosed_indices.iter() {
@@ -259,10 +262,16 @@ pub fn nizk_prove<R: RngCore>(
             disclosed_msgs.insert(j, messages.0[j]);
         }
     }
-    
-    let challenge = compute_challenge(pk, &disclosed_msgs, &commitment.A_bar, &commitment.B_bar, &commitment.U);
+
+    let challenge = compute_challenge(
+        pk,
+        &disclosed_msgs,
+        &commitment.A_bar,
+        &commitment.B_bar,
+        &commitment.U,
+    );
     let response = pok_prove(&state, &challenge);
-    
+
     Ok(NonInteractiveProof {
         A_bar: commitment.A_bar,
         B_bar: commitment.B_bar,
@@ -281,7 +290,7 @@ pub fn nizk_verify(
     proof: &NonInteractiveProof,
 ) -> bool {
     let challenge = compute_challenge(pk, disclosed, &proof.A_bar, &proof.B_bar, &proof.U);
-    
+
     let commitment = PoKCommitment {
         A_bar: proof.A_bar,
         B_bar: proof.B_bar,
@@ -292,7 +301,7 @@ pub fn nizk_verify(
         t: proof.t,
         u_i: proof.u_i.clone(),
     };
-    
+
     pok_verify(params, pk, disclosed, &commitment, &challenge, &response)
 }
 
@@ -317,32 +326,32 @@ fn compute_challenge_prefix(
 ) -> Scalar {
     let mut hasher = Keccak256::new();
     hasher.update(POK_CTX);
-    
+
     use ark_serialize::CanonicalSerialize;
-    
+
     let mut pk_bytes = Vec::new();
     pk.X.serialize_compressed(&mut pk_bytes).unwrap_or_default();
     hasher.update(&pk_bytes);
-    
+
     for (i, m) in disclosed.iter().enumerate() {
         hasher.update(&(i as u64).to_be_bytes());
         let mut m_bytes = Vec::new();
         m.serialize_compressed(&mut m_bytes).unwrap_or_default();
         hasher.update(&m_bytes);
     }
-    
+
     let mut a_bytes = Vec::new();
     a_bar.serialize_compressed(&mut a_bytes).unwrap_or_default();
     hasher.update(&a_bytes);
-    
+
     let mut b_bytes = Vec::new();
     b_bar.serialize_compressed(&mut b_bytes).unwrap_or_default();
     hasher.update(&b_bytes);
-    
+
     let mut u_bytes = Vec::new();
     u.serialize_compressed(&mut u_bytes).unwrap_or_default();
     hasher.update(&u_bytes);
-    
+
     let hash_result = hasher.finalize();
     Scalar::from_be_bytes_mod_order(&hash_result)
 }
@@ -359,50 +368,52 @@ pub fn nizk_prove_prefix<R: RngCore>(
     if disclosed_count > messages.0.len() || messages.0.len() > params.L {
         return Err("invalid disclosed count or message length");
     }
-    
+
     let l = messages.0.len();
-    
+
     let mut r = Scalar::rand(rng);
-    while r.is_zero() { r = Scalar::rand(rng); }
-    
+    while r.is_zero() {
+        r = Scalar::rand(rng);
+    }
+
     let a_bar = (signature.A * r).into_affine();
-    
+
     let mut c_j = params.G1.into_group();
     for j in 0..disclosed_count {
         c_j += params.H[j] * messages.0[j];
     }
-    
+
     let mut c = c_j;
     for i in disclosed_count..l {
         c += params.H[i] * messages.0[i];
     }
     let b_bar = (c * r - signature.A * (r * signature.e)).into_affine();
-    
+
     let alpha = Scalar::rand(rng);
     let beta = Scalar::rand(rng);
     let mut deltas = Vec::with_capacity(l - disclosed_count);
     let mut u_term = params.G1.into_group() * Scalar::zero();
-    
+
     for i in disclosed_count..l {
         let delta_i = Scalar::rand(rng);
         deltas.push(delta_i);
         u_term += params.H[i] * delta_i;
     }
-    
+
     let u = (c_j * alpha + a_bar * beta + u_term).into_affine();
-    
+
     let disclosed_msgs = &messages.0[0..disclosed_count];
     let challenge = compute_challenge_prefix(pk, disclosed_msgs, &a_bar, &b_bar, &u);
-    
+
     let s = alpha + r * challenge;
     let t = beta - signature.e * challenge;
-    
+
     let mut u_i = Vec::with_capacity(l - disclosed_count);
     for i in disclosed_count..l {
         let idx = i - disclosed_count;
         u_i.push(deltas[idx] + r * messages.0[i] * challenge);
     }
-    
+
     Ok(NonInteractiveProofPrefix {
         A_bar: a_bar,
         B_bar: b_bar,
@@ -424,22 +435,23 @@ pub fn nizk_verify_prefix(
     if disclosed_count > params.L {
         return false;
     }
-    
-    let challenge = compute_challenge_prefix(pk, disclosed_msgs, &proof.A_bar, &proof.B_bar, &proof.U);
-    
+
+    let challenge =
+        compute_challenge_prefix(pk, disclosed_msgs, &proof.A_bar, &proof.B_bar, &proof.U);
+
     let mut c_j = params.G1.into_group();
     for (j, &m_j) in disclosed_msgs.iter().enumerate() {
         c_j += params.H[j] * m_j;
     }
-    
+
     let left_pairing = Bn254::pairing(proof.A_bar, pk.X);
     let right_pairing = Bn254::pairing(proof.B_bar, params.G2);
     if left_pairing != right_pairing {
         return false;
     }
-    
+
     let lhs = (proof.U.into_group() + proof.B_bar * challenge).into_affine();
-    
+
     let mut sum_ui_hi = params.G1.into_group() * Scalar::zero();
     for (idx, &u_i_val) in proof.u_i.iter().enumerate() {
         let i = disclosed_count + idx;
@@ -447,8 +459,8 @@ pub fn nizk_verify_prefix(
             sum_ui_hi += params.H[i] * u_i_val;
         }
     }
-    
+
     let rhs = (c_j * proof.s + proof.A_bar * proof.t + sum_ui_hi).into_affine();
-    
+
     lhs == rhs
 }

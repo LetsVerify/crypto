@@ -1,8 +1,8 @@
 mod utils;
 
 use bbs_plus::bbs_bn254::{
-    utils::load_g1_from_json,
-    BlindedCommitment, Parameters, PrivateKey, PublicKey, Signature, blind_with_rng, keygen, keygen_with_rng, sign_no_blind_with_rng, verify_no_blind
+    BlindedCommitment, Parameters, PrivateKey, PublicKey, Signature, blind_with_rng, keygen,
+    keygen_with_rng, sign_no_blind_with_rng, utils::load_g1_from_json, verify_no_blind,
 };
 use rand::rngs::OsRng;
 use serde_json::json;
@@ -109,10 +109,8 @@ pub fn unblind(
     let signature = load_from_js(signature, "signature", Signature::load_from_json)?;
     let commitment = load_from_js(commitment, "commitment", BlindedCommitment::load_from_json)?;
 
-    let unblinded_signature =
-        bbs_plus::bbs_bn254::unblind(&params, &signature, &commitment).map_err(|e| {
-            JsValue::from_str(&format!("unblinding failed: {e}"))
-        })?;
+    let unblinded_signature = bbs_plus::bbs_bn254::unblind(&params, &signature, &commitment)
+        .map_err(|e| JsValue::from_str(&format!("unblinding failed: {e}")))?;
 
     let unblinded_signature_json = unblinded_signature.export_to_obj();
 
@@ -135,8 +133,15 @@ pub fn sign_with_blind(
     let commitment = load_from_js(commitment, "commitment", load_g1_from_json)?;
     let bind_index_usize = bind_index as usize;
 
-    let signature = bbs_plus::bbs_bn254::sign_with_blind_with_rng(&params, &sk, &bind_index_usize, &commitment, &visual_messages, &mut rng)
-        .map_err(|e| JsValue::from_str(&format!("signing failed: {e}")))?;
+    let signature = bbs_plus::bbs_bn254::sign_with_blind_with_rng(
+        &params,
+        &sk,
+        &bind_index_usize,
+        &commitment,
+        &visual_messages,
+        &mut rng,
+    )
+    .map_err(|e| JsValue::from_str(&format!("signing failed: {e}")))?;
 
     let signature_json: serde_json::Value = signature.export_to_obj();
 

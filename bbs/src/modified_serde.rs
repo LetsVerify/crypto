@@ -1,5 +1,5 @@
 use ark_bn254::{Fr as Scalar, G1Affine as G1, G2Affine as G2};
-use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
+use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 
 pub fn serialize_scalar<S>(scalar: &Scalar, serializer: S) -> Result<S::Ok, S::Error>
 where

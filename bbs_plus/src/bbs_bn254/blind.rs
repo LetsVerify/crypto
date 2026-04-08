@@ -142,7 +142,7 @@ pub fn commitment_pok_verify(
     params: &Parameters,
     commitment: &BlindedCommitment,
     proof: &CommitmentProof,
-    blind_index: &usize
+    blind_index: &usize,
 ) -> Result<bool, &'static str> {
     if params.H.len() < proof.m_hats.len() + 1 {
         return Err("parameters do not include enough message base points");
@@ -188,7 +188,7 @@ fn commitment_challenge(
 mod tests {
     use super::*;
     use crate::bbs_bn254::keygen::keygen;
-    
+
     #[test]
     fn blind_and_pok_roundtrip() {
         let (params, _pk, _sk) = keygen(3);
@@ -198,8 +198,14 @@ mod tests {
         let blind_index = 1;
         let commitment = blind_with_rng(&params, &messages, &1, &mut rng).unwrap();
         let hidden_part = vec![Scalar::from(2u64), Scalar::from(3u64)];
-        let proof =
-            commitment_pok_prove_with_rng(&params, &commitment, &hidden_part, &blind_index, &mut rng).unwrap();
+        let proof = commitment_pok_prove_with_rng(
+            &params,
+            &commitment,
+            &hidden_part,
+            &blind_index,
+            &mut rng,
+        )
+        .unwrap();
 
         let ok = commitment_pok_verify(&params, &commitment, &proof, &blind_index).unwrap();
         assert!(ok);

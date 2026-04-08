@@ -2,11 +2,11 @@
 #![allow(non_snake_case)]
 
 use ark_bn254::Bn254;
-use ark_std::{rand::RngCore, UniformRand};
 use ark_ec::pairing::Pairing;
+use ark_std::{UniformRand, rand::RngCore};
 
-use crate::structs::*;
 use crate::pub_use::*;
+use crate::structs::*;
 
 /// Key gen function.
 /// `L`: the length of messages.
@@ -21,7 +21,7 @@ pub fn setup<R: RngCore>(L: usize, rng: &mut R) -> Params {
         G1: G1::generator(),
         G2: G2::generator(),
         L: L,
-        H: H
+        H: H,
     }
 }
 
@@ -38,7 +38,12 @@ pub fn keygen<R: RngCore>(rng: &mut R) -> (PublicKey, PrivateKey) {
 /// + `params`: the public parameters
 /// + `sk`: the private key
 /// + `rng`: the rng engine
-pub fn sign<R: RngCore>(messages: &Messages, params: &Params, sk: &PrivateKey, rng: &mut R) -> Result<Signature, &'static str> {
+pub fn sign<R: RngCore>(
+    messages: &Messages,
+    params: &Params,
+    sk: &PrivateKey,
+    rng: &mut R,
+) -> Result<Signature, &'static str> {
     if messages.0.len() > params.L {
         return Err("message length exceeds parameters");
     }
@@ -49,7 +54,7 @@ pub fn sign<R: RngCore>(messages: &Messages, params: &Params, sk: &PrivateKey, r
         C += params.H[i] * m_i;
     }
     // 2. sample random scalars e
-    let e =Scalar::rand(rng);
+    let e = Scalar::rand(rng);
 
     // 3. calc A = C * (1/(x+e))
     let mut tmp = sk.x + e;
@@ -73,6 +78,6 @@ pub fn verify(messages: &Messages, signature: &Signature, params: &Params, pk: &
     let left = Bn254::pairing(signature.A, pk.X + params.G2 * signature.e);
     // 3. calc e(C', G2)
     let right = Bn254::pairing(C_prime.into_affine(), params.G2);
-    
+
     left == right
 }
