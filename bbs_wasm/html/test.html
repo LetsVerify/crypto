@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>BBS Wasm Test</title>
+</head>
+<body>
+    <h1>BBS Wasm Test</h1>
+    <p>Open the browser's developer tools (Console) to view the output results.</p>
+
+    <script type="module">
+        import init, { 
+            init_panic_hook, 
+            setup_debug, 
+            keygen_debug, 
+            sign_debug, 
+            verify,
+            pok_nizk_prove_debug,
+            pok_nizk_verify
+        } from '../pkg/bbs_wasm.js';
+
+        async function runTest() {
+            // Initialize Wasm
+            await init();
+            console.log("Wasm initialized successfully");
+            
+            init_panic_hook();
+            console.log("Panic hook initialized successfully");
+
+            try {
+                // 1. Setup
+                const numMessages = 3;
+                console.log(`\n=== 1. Setup (L=${numMessages}) ===`);
+                const params = setup_debug(numMessages);
+                console.log("Params:", params);
+
+                // 2. KeyGen
+                console.log("\n=== 2. Key Generation ===");
+                const keys = keygen_debug();
+                console.log("Public Key:", keys.pk);
+                console.log("Private Key:", keys.sk);
+
+                // 3. Create Messages
+                console.log("\n=== 3. Create Messages ===");
+                const messagesObj = [
+                    "1",
+                    "2",
+                    "3"
+                ];
+                console.log("Messages:", messagesObj);
+
+                // 4. Sign
+                console.log("\n=== 4. Sign ===");
+                const sig = sign_debug(messagesObj, params, keys.sk);
+                console.log("Signature:", sig);
+
+                // 5. Verify
+                console.log("\n=== 5. Verify ===");
+                const isValid = verify(messagesObj, sig, params, keys.pk);
+                console.log("Verify result:", isValid);
+
+                // 6. PoK NIZK Prove (disclose the 1st message, hide the rest)
+                const disclosedCount = 1;
+                console.log(`\n=== 6. PoK Prove (Disclosed: ${disclosedCount}) ===`);
+                const proof = pok_nizk_prove_debug(params, keys.pk, messagesObj, sig, disclosedCount);
+                console.log("PoK Proof:", proof);
+
+                // 7. PoK NIZK Verify
+                console.log("\n=== 7. PoK Verify ===");
+                const disclosedMsgsObj = messagesObj.slice(0, disclosedCount);
+                console.log("Disclosed Messages:", disclosedMsgsObj);
+                
+                const isProofValid = pok_nizk_verify(params, keys.pk, disclosedMsgsObj, proof);
+                console.log("PoK Verify result:", isProofValid);
+
+                if (isValid && isProofValid) {
+                    console.log("\n✅ All tests passed!");
+                } else {
+                    console.log("\n❌ Tests failed!");
+                }
+            } catch (err) {
+                console.error("\n❌ An error occurred:", err);
+            }
+        }
+
+        runTest();
+    </script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 mod tests {
     use ark_bn254::Fr as Scalar;
-    use bbs::bbs_bn254::{verify::verify_no_blind, *};
+    use bbs_plus::bbs_bn254::{verify::verify_no_blind, *};
     #[test]
     fn test_no_blind() {
         let (params, pk, sk) = keygen(5);

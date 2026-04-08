@@ -1,5 +1,5 @@
 use ark_bn254::Fr as Scalar;
-use bbs::bbs_bn254::{keygen, sign_no_blind, verify_no_blind};
+use bbs_plus::bbs_bn254::{keygen, sign_no_blind, verify_no_blind};
 use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 
 fn sample_messages(count: usize) -> Vec<Scalar> {

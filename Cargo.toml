@@ -2,7 +2,8 @@
 members = [
     "bbs",
     "bbs_plus",
-    "bbs_plus_wasm",
+    "bbs_plus_wasm", 
+    "bbs_wasm",
 ]
 
 resolver = "3"
