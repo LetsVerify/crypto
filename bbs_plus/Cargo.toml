@@ -1,6 +1,6 @@
 [package]
-name = "bbs"
-version = "0.1.0"
+name = "bbs_plus"
+version = "26.3.29"
 edition = "2024"
 
 [dependencies]
@@ -11,9 +11,14 @@ ark-poly = "0.5.0"
 ark-serialize = "0.5.0"
 ark-std = "0.5.0"
 substrate-bn = "0.6.0"
-sha3 = "0.10"
+sha2 = "0.10"
 serde_json = "1.0.149"
 serde = { version = "1.0.228", features = ["derive"] }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "sign_verify"
+path = "benchmark/sign_pairing.rs"
+harness = false

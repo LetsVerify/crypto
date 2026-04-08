@@ -1,144 +1,298 @@
 mod utils;
 
-use bbs::bbs_bn254::{
-    utils::load_g1_from_json,
-    BlindedCommitment, Parameters, PrivateKey, PublicKey, Signature, blind_with_rng, keygen, keygen_with_rng, sign_no_blind_with_rng, verify_no_blind
-};
-use rand::rngs::OsRng;
-use serde_json::json;
+use ark_std::test_rng;
+use bbs::bbs::{keygen as bbs_keygen, setup as bbs_setup, sign as bbs_sign, verify as bbs_verify};
+use bbs::pok::{nizk_prove_prefix, nizk_verify_prefix};
+use bbs::structs::{Messages, Params, PrivateKey, PublicKey, Signature};
+use rand::thread_rng;
+use serde::Serialize;
+use serde_wasm_bindgen::{from_value, to_value};
+use std::convert::TryInto;
 use wasm_bindgen::prelude::*;
 
-use utils::{load_from_js, parse_scalar_messages, to_js_json_compatible};
+#[wasm_bindgen]
+pub fn init_panic_hook() {
+    utils::set_panic_hook();
+}
 
-#[wasm_bindgen(start)]
-pub fn init() {
-    console_error_panic_hook::set_once();
+#[derive(Serialize)]
+struct KeysJson {
+    pk: utils::PublicKeyJson,
+    sk: utils::PrivateKeyJson,
 }
 
 #[wasm_bindgen]
-pub fn bbs_keygen_test(l: u32) -> Result<JsValue, JsValue> {
-    let (params, pk, sk) = keygen(l as usize);
+pub fn setup(l: usize) -> Result<JsValue, JsValue> {
+    let mut rng = thread_rng();
+    let params = bbs_setup(l, &mut rng);
 
-    let params_json: serde_json::Value = params.export_to_obj();
-    let pk_json: serde_json::Value = pk.export_to_obj();
-    let sk_json: serde_json::Value = sk.export_to_obj();
-    let obj = json!({
-        "params": params_json,
-        "pk": pk_json,
-        "sk": sk_json,
-    });
-
-    to_js_json_compatible(&obj)
+    let params_dto: utils::ParamsJson = (&params).into();
+    to_value(&params_dto).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 #[wasm_bindgen]
-pub fn bbs_keygen(l: u32) -> Result<JsValue, JsValue> {
-    let mut rng = OsRng;
-    let (params, pk, sk) = keygen_with_rng(l as usize, &mut rng);
+pub fn keygen() -> Result<JsValue, JsValue> {
+    let mut rng = thread_rng();
+    let (pk, sk) = bbs_keygen(&mut rng);
 
-    let params_json: serde_json::Value = params.export_to_obj();
-    let pk_json: serde_json::Value = pk.export_to_obj();
-    let sk_json: serde_json::Value = sk.export_to_obj();
+    let pk_dto: utils::PublicKeyJson = (&pk).into();
+    let sk_dto: utils::PrivateKeyJson = (&sk).into();
 
-    let obj = json!({
-        "params": params_json,
-        "pk": pk_json,
-        "sk": sk_json,
-    });
+    let keys = KeysJson {
+        pk: pk_dto,
+        sk: sk_dto,
+    };
 
-    to_js_json_compatible(&obj)
+    to_value(&keys).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 #[wasm_bindgen]
-pub fn sign_no_blind(params: JsValue, sk: JsValue, messages: JsValue) -> Result<JsValue, JsValue> {
-    let mut rng = OsRng;
+pub fn sign(messages_js: JsValue, params_js: JsValue, sk_js: JsValue) -> Result<JsValue, JsValue> {
+    let mut rng = thread_rng();
 
-    let params = load_from_js(params, "params", Parameters::load_from_json)?;
-    let sk = load_from_js(sk, "sk", PrivateKey::load_from_json)?;
-    let messages = parse_scalar_messages(messages)?;
+    let msgs_dto: utils::MessagesJson =
+        from_value(messages_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let messages: Messages = (&msgs_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
 
-    let signature = sign_no_blind_with_rng(&params, &sk, &messages, &mut rng)
-        .map_err(|e| JsValue::from_str(&format!("signing failed: {e}")))?;
+    let params_dto: utils::ParamsJson =
+        from_value(params_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let params: Params = (&params_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
 
-    let signature_json: serde_json::Value = signature.export_to_obj();
+    let sk_dto: utils::PrivateKeyJson =
+        from_value(sk_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let sk: PrivateKey = (&sk_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
 
-    to_js_json_compatible(&signature_json)
+    let sig = bbs_sign(&messages, &params, &sk, &mut rng)
+        .map_err(|e| JsValue::from_str(&format!("Signing failed: {}", e)))?;
+
+    let sig_dto: utils::SignatureJson = (&sig).into();
+    to_value(&sig_dto).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 #[wasm_bindgen]
 pub fn verify(
-    params: JsValue,
-    pk: JsValue,
-    messages: JsValue,
-    signature: JsValue,
+    messages_js: JsValue,
+    signature_js: JsValue,
+    params_js: JsValue,
+    pk_js: JsValue,
 ) -> Result<bool, JsValue> {
-    let params = load_from_js(params, "params", Parameters::load_from_json)?;
-    let pk = load_from_js(pk, "pk", PublicKey::load_from_json)?;
-    let signature = load_from_js(signature, "signature", Signature::load_from_json)?;
-    let messages = parse_scalar_messages(messages)?;
+    let msgs_dto: utils::MessagesJson =
+        from_value(messages_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let messages: Messages = (&msgs_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
 
-    verify_no_blind(&params, &pk, &messages, &signature)
-        .map_err(|e| JsValue::from_str(&format!("verify failed: {e}")))
+    let sig_dto: utils::SignatureJson =
+        from_value(signature_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let signature: Signature = (&sig_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
+
+    let params_dto: utils::ParamsJson =
+        from_value(params_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let params: Params = (&params_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
+
+    let pk_dto: utils::PublicKeyJson =
+        from_value(pk_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let pk: PublicKey = (&pk_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
+
+    Ok(bbs_verify(&messages, &signature, &params, &pk))
 }
 
 #[wasm_bindgen]
-pub fn blind(params: JsValue, messages: JsValue, blind_index: u32) -> Result<JsValue, JsValue> {
-    let params = load_from_js(params, "params", Parameters::load_from_json)?;
-    let messages = parse_scalar_messages(messages)?;
-    let mut rng = OsRng;
-
-    let blind_index_usize = blind_index as usize;
-    let blinded_commitment = blind_with_rng(&params, &messages, &blind_index_usize, &mut rng)
-        .map_err(|e| JsValue::from_str(&format!("blinding failed: {e}")))?;
-
-    let blinded_commitment_json: serde_json::Value =
-        serde_json::from_str(&blinded_commitment.export()).map_err(|e| {
-            JsValue::from_str(&format!("failed to parse blinded commitment json: {e}"))
-        })?;
-
-    to_js_json_compatible(&blinded_commitment_json)
-}
-
-#[wasm_bindgen]
-pub fn unblind(
-    params: JsValue,
-    signature: JsValue,
-    commitment: JsValue,
+pub fn pok_nizk_prove(
+    params_js: JsValue,
+    pk_js: JsValue,
+    messages_js: JsValue,
+    signature_js: JsValue,
+    disclosed_count: usize,
 ) -> Result<JsValue, JsValue> {
-    let params = load_from_js(params, "params", Parameters::load_from_json)?;
-    let signature = load_from_js(signature, "signature", Signature::load_from_json)?;
-    let commitment = load_from_js(commitment, "commitment", BlindedCommitment::load_from_json)?;
+    let mut rng = thread_rng();
 
-    let unblinded_signature =
-        bbs::bbs_bn254::unblind(&params, &signature, &commitment).map_err(|e| {
-            JsValue::from_str(&format!("unblinding failed: {e}"))
-        })?;
+    let params_dto: utils::ParamsJson =
+        from_value(params_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let params: Params = (&params_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
 
-    let unblinded_signature_json = unblinded_signature.export_to_obj();
+    let pk_dto: utils::PublicKeyJson =
+        from_value(pk_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let pk: PublicKey = (&pk_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
 
-    to_js_json_compatible(&unblinded_signature_json)
+    let msgs_dto: utils::MessagesJson =
+        from_value(messages_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let messages: Messages = (&msgs_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
+
+    let sig_dto: utils::SignatureJson =
+        from_value(signature_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let signature: Signature = (&sig_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
+
+    let proof = nizk_prove_prefix(
+        &params,
+        &pk,
+        &messages,
+        &signature,
+        disclosed_count,
+        &mut rng,
+    )
+    .map_err(|e| JsValue::from_str(&format!("NIZK Prove failed: {}", e)))?;
+
+    let proof_dto: utils::NonInteractiveProofPrefixJson = (&proof).into();
+    to_value(&proof_dto).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 #[wasm_bindgen]
-pub fn sign_with_blind(
-    params: JsValue,
-    sk: JsValue,
-    bind_index: u32,
-    visual_messages: JsValue,
-    commitment: JsValue,
+pub fn pok_nizk_verify(
+    params_js: JsValue,
+    pk_js: JsValue,
+    disclosed_msgs_js: JsValue,
+    proof_js: JsValue,
+) -> Result<bool, JsValue> {
+    let params_dto: utils::ParamsJson =
+        from_value(params_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let params: Params = (&params_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
+
+    let pk_dto: utils::PublicKeyJson =
+        from_value(pk_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let pk: PublicKey = (&pk_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
+
+    let msgs_dto: utils::MessagesJson =
+        from_value(disclosed_msgs_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let disclosed_msgs: Messages = (&msgs_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
+
+    let proof_dto: utils::NonInteractiveProofPrefixJson =
+        from_value(proof_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let proof: utils::NonInteractiveProofPrefix = (&proof_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
+
+    Ok(nizk_verify_prefix(&params, &pk, &disclosed_msgs.0, &proof))
+}
+
+#[wasm_bindgen]
+pub fn setup_debug(l: usize) -> Result<JsValue, JsValue> {
+    let mut rng = test_rng();
+    let params = bbs_setup(l, &mut rng);
+
+    let params_dto: utils::ParamsJson = (&params).into();
+    to_value(&params_dto).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+#[wasm_bindgen]
+pub fn keygen_debug() -> Result<JsValue, JsValue> {
+    let mut rng = test_rng();
+    let (pk, sk) = bbs_keygen(&mut rng);
+
+    let pk_dto: utils::PublicKeyJson = (&pk).into();
+    let sk_dto: utils::PrivateKeyJson = (&sk).into();
+
+    let keys = KeysJson {
+        pk: pk_dto,
+        sk: sk_dto,
+    };
+
+    to_value(&keys).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+#[wasm_bindgen]
+pub fn sign_debug(
+    messages_js: JsValue,
+    params_js: JsValue,
+    sk_js: JsValue,
 ) -> Result<JsValue, JsValue> {
-    let mut rng = OsRng;
+    let mut rng = test_rng();
 
-    let params = load_from_js(params, "params", Parameters::load_from_json)?;
-    let sk = load_from_js(sk, "sk", PrivateKey::load_from_json)?;
-    let visual_messages = parse_scalar_messages(visual_messages)?;
-    let commitment = load_from_js(commitment, "commitment", load_g1_from_json)?;
-    let bind_index_usize = bind_index as usize;
+    let msgs_dto: utils::MessagesJson =
+        from_value(messages_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let messages: Messages = (&msgs_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
 
-    let signature = bbs::bbs_bn254::sign_with_blind_with_rng(&params, &sk, &bind_index_usize, &commitment, &visual_messages, &mut rng)
-        .map_err(|e| JsValue::from_str(&format!("signing failed: {e}")))?;
+    let params_dto: utils::ParamsJson =
+        from_value(params_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let params: Params = (&params_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
 
-    let signature_json: serde_json::Value = signature.export_to_obj();
+    let sk_dto: utils::PrivateKeyJson =
+        from_value(sk_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let sk: PrivateKey = (&sk_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
 
-    to_js_json_compatible(&signature_json)
+    let sig = bbs_sign(&messages, &params, &sk, &mut rng)
+        .map_err(|e| JsValue::from_str(&format!("Signing failed: {}", e)))?;
+
+    let sig_dto: utils::SignatureJson = (&sig).into();
+    to_value(&sig_dto).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+#[wasm_bindgen]
+pub fn pok_nizk_prove_debug(
+    params_js: JsValue,
+    pk_js: JsValue,
+    messages_js: JsValue,
+    signature_js: JsValue,
+    disclosed_count: usize,
+) -> Result<JsValue, JsValue> {
+    let mut rng = test_rng();
+
+    let params_dto: utils::ParamsJson =
+        from_value(params_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let params: Params = (&params_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
+
+    let pk_dto: utils::PublicKeyJson =
+        from_value(pk_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let pk: PublicKey = (&pk_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
+
+    let msgs_dto: utils::MessagesJson =
+        from_value(messages_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let messages: Messages = (&msgs_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
+
+    let sig_dto: utils::SignatureJson =
+        from_value(signature_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let signature: Signature = (&sig_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
+
+    let proof = nizk_prove_prefix(
+        &params,
+        &pk,
+        &messages,
+        &signature,
+        disclosed_count,
+        &mut rng,
+    )
+    .map_err(|e| JsValue::from_str(&format!("NIZK Prove failed: {}", e)))?;
+
+    let proof_dto: utils::NonInteractiveProofPrefixJson = (&proof).into();
+    to_value(&proof_dto).map_err(|e| JsValue::from_str(&e.to_string()))
 }

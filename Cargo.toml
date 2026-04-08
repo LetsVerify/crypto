@@ -1,6 +1,8 @@
 [workspace]
 members = [
     "bbs",
+    "bbs_plus",
+    "bbs_plus_wasm", 
     "bbs_wasm",
 ]
 
