@@ -199,6 +199,7 @@ dependencies = [
  "ark-serialize",
  "ark-std",
  "criterion",
+ "hex",
  "serde",
  "serde_json",
  "sha3",

@@ -1,13 +1,17 @@
 name: Rust CI
 
 "on":
-  push:
-    branches:
-      - master
+  # push:
+    # branches:
+      # - master
   pull_request:
     branches:
       - master
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:

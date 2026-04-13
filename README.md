@@ -12,6 +12,10 @@
 
 > run `cargo bench -p bbs` to run the benchmarks.
 
+## Reference
+
++ [Revisiting BBS Signatures](https://eprint.iacr.org/2023/275)
+
 ## Thanks
 
 + [arkworks::algebra](https://github.com/arkworks-rs/algebra)

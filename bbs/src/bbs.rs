@@ -1,4 +1,4 @@
-//! Key gen related functions here.
+//! Basic BBS scheme functions here.
 #![allow(non_snake_case)]
 
 use ark_bn254::Bn254;
