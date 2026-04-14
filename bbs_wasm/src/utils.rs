@@ -235,3 +235,55 @@ impl TryFrom<&NonInteractiveProofPrefixJson> for NonInteractiveProofPrefix {
         })
     }
 }
+
+use bbs::extend_structs::{UserCommitment, PartialSignature};
+
+#[derive(Serialize, Deserialize)]
+pub struct UserCommitmentJson {
+    pub C2: G1Json,
+}
+
+impl From<&UserCommitment> for UserCommitmentJson {
+    fn from(commit: &UserCommitment) -> Self {
+        Self {
+            C2: g1_to_json(&commit.C2),
+        }
+    }
+}
+
+impl TryFrom<&UserCommitmentJson> for UserCommitment {
+    type Error = String;
+    fn try_from(dto: &UserCommitmentJson) -> Result<Self, Self::Error> {
+        Ok(UserCommitment {
+            C2: g1_from_json(&dto.C2)?,
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct PartialSignatureJson {
+    pub A1: G1Json,
+    pub A2_prime: G1Json,
+    pub e: String,
+}
+
+impl From<&PartialSignature> for PartialSignatureJson {
+    fn from(sig: &PartialSignature) -> Self {
+        Self {
+            A1: g1_to_json(&sig.A1),
+            A2_prime: g1_to_json(&sig.A2_prime),
+            e: sig.e.to_string(),
+        }
+    }
+}
+
+impl TryFrom<&PartialSignatureJson> for PartialSignature {
+    type Error = String;
+    fn try_from(dto: &PartialSignatureJson) -> Result<Self, Self::Error> {
+        Ok(PartialSignature {
+            A1: g1_from_json(&dto.A1)?,
+            A2_prime: g1_from_json(&dto.A2_prime)?,
+            e: Scalar::from_str(&dto.e).map_err(|_| "Invalid e")?,
+        })
+    }
+}
