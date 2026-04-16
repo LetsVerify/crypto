@@ -21,4 +21,8 @@ criterion = { version = "0.5", features = ["html_reports"] }
 
 [[bin]]
 name = "tools"
-path = "bin/tools.rs"
+path = "script/tools.rs"
+
+[[bin]]
+name = "hash_test"
+path = "script/hash_test.rs"

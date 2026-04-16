@@ -87,8 +87,10 @@ fn test_bbs_extended_scheme() {
     // Disclosed count: num_public_messages + 1 (m_null is disclosed to verifier)
     // The only hidden message is m_gamma at the end
     let disclosed_count = num_public_messages + 1;
-    
+    let ctx = "LetsVerify".as_bytes(); 
+
     let proof = nizk_prove_prefix(
+        &ctx,
         &params,
         &pk,
         &messages,
@@ -102,6 +104,7 @@ fn test_bbs_extended_scheme() {
     // ---------------------------------------------------------
     let disclosed_msgs = &messages_vec[..disclosed_count];
     let is_valid = nizk_verify_prefix(
+        &ctx,
         &params,
         &pk,
         disclosed_msgs,

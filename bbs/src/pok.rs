@@ -53,9 +53,6 @@ pub struct NonInteractiveProof {
     pub u_i: HashMap<usize, Scalar>,
 }
 
-/// Context for FS heuristic
-const POK_CTX: &[u8] = b"BBS_PoK_1";
-
 /// Compute the public commitment $C_J = G_1 + \sum_{j \in J} m_j \cdot H_j$
 pub fn compute_c_j(params: &Params, disclosed: &DisclosedMessages) -> G1 {
     let mut c_j = params.G1.into_group();
@@ -199,6 +196,7 @@ pub fn pok_verify(
 /* ================== Non-Interactive Version (Fiat-Shamir) ================== */
 
 fn compute_challenge(
+    pok_ctx: &[u8],
     pk: &PublicKey,
     disclosed: &DisclosedMessages,
     a_bar: &G1,
@@ -206,7 +204,7 @@ fn compute_challenge(
     u: &G1,
 ) -> Scalar {
     let mut hasher = Keccak256::new();
-    hasher.update(POK_CTX);
+    hasher.update(pok_ctx);
 
     // Convert components to bytes appropriately (this is simplified, ideal uses CanonicalSerialize)
     use ark_serialize::CanonicalSerialize;
@@ -246,6 +244,7 @@ fn compute_challenge(
 
 /// NIZK Prove (Fiat-Shamir)
 pub fn nizk_prove<R: RngCore>(
+    pok_ctx: &[u8],
     params: &Params,
     pk: &PublicKey,
     messages: &Messages,
@@ -264,6 +263,7 @@ pub fn nizk_prove<R: RngCore>(
     }
 
     let challenge = compute_challenge(
+        pok_ctx,
         pk,
         &disclosed_msgs,
         &commitment.A_bar,
@@ -284,12 +284,13 @@ pub fn nizk_prove<R: RngCore>(
 
 /// NIZK Verify (Fiat-Shamir)
 pub fn nizk_verify(
+    pok_ctx: &[u8],
     params: &Params,
     pk: &PublicKey,
     disclosed: &DisclosedMessages,
     proof: &NonInteractiveProof,
 ) -> bool {
-    let challenge = compute_challenge(pk, disclosed, &proof.A_bar, &proof.B_bar, &proof.U);
+    let challenge = compute_challenge(pok_ctx, pk, disclosed, &proof.A_bar, &proof.B_bar, &proof.U);
 
     let commitment = PoKCommitment {
         A_bar: proof.A_bar,
@@ -317,47 +318,65 @@ pub struct NonInteractiveProofPrefix {
     pub u_i: Vec<Scalar>,
 }
 
-fn compute_challenge_prefix(
-    pk: &PublicKey,
+use ark_ff::{BigInteger};
+
+pub fn compute_challenge_prefix(
+    pok_ctx: &[u8],
+    _pk: &PublicKey,
     disclosed: &[Scalar],
     a_bar: &G1,
     b_bar: &G1,
     u: &G1,
 ) -> Scalar {
     let mut hasher = Keccak256::new();
-    hasher.update(POK_CTX);
+    let mut payload = Vec::new();
 
-    use ark_serialize::CanonicalSerialize;
+    // 1. Hash ctx (Assuming pok_ctx is already 32 bytes externally or padded/hashed to 32 bytes)
+    // For compatibility with Solidity's `bytes32 ctx`, we expect `pok_ctx` to be exactly 32 bytes.
+    let mut ctx_bytes = [0u8; 32];
+    if pok_ctx.len() == 32 {
+        ctx_bytes.copy_from_slice(pok_ctx);
+    } else {
+        // Pad with trailing zeros to match Solidity's bytes32("str")
+        let len = pok_ctx.len().min(32);
+        ctx_bytes[..len].copy_from_slice(&pok_ctx[..len]);
+    }
+    payload.extend_from_slice(&ctx_bytes);
 
-    let mut pk_bytes = Vec::new();
-    pk.X.serialize_compressed(&mut pk_bytes).unwrap_or_default();
-    hasher.update(&pk_bytes);
-
-    for (i, m) in disclosed.iter().enumerate() {
-        hasher.update(&(i as u64).to_be_bytes());
-        let mut m_bytes = Vec::new();
-        m.serialize_compressed(&mut m_bytes).unwrap_or_default();
-        hasher.update(&m_bytes);
+    // 2. Hash disclosed messages. (Solidity `abi.encodePacked` of `uint256[]` is just flat consecutive 32-byte words)
+    for m in disclosed.iter() {
+        let m_bytes = m.into_bigint().to_bytes_be();
+        // Since arkworks `to_bytes_be` might not pad to 32 bytes exactly depending on the field, 
+        // we ensure it is 32 bytes for Solidity uint256:
+        let mut padded = [0u8; 32];
+        let offset = 32 - m_bytes.len().min(32);
+        padded[offset..].copy_from_slice(&m_bytes);
+        payload.extend_from_slice(&padded);
     }
 
-    let mut a_bytes = Vec::new();
-    a_bar.serialize_compressed(&mut a_bytes).unwrap_or_default();
-    hasher.update(&a_bytes);
+    // 3. Hash A_bar.x, A_bar.y
+    let push_g1 = |payload: &mut Vec<u8>, p: &G1| {
+        let x_bytes = p.x.into_bigint().to_bytes_be();
+        let mut px = [0u8; 32]; px[32 - x_bytes.len().min(32)..].copy_from_slice(&x_bytes);
+        payload.extend_from_slice(&px);
 
-    let mut b_bytes = Vec::new();
-    b_bar.serialize_compressed(&mut b_bytes).unwrap_or_default();
-    hasher.update(&b_bytes);
+        let y_bytes = p.y.into_bigint().to_bytes_be();
+        let mut py = [0u8; 32]; py[32 - y_bytes.len().min(32)..].copy_from_slice(&y_bytes);
+        payload.extend_from_slice(&py);
+    };
 
-    let mut u_bytes = Vec::new();
-    u.serialize_compressed(&mut u_bytes).unwrap_or_default();
-    hasher.update(&u_bytes);
+    push_g1(&mut payload, a_bar);
+    push_g1(&mut payload, b_bar);
+    push_g1(&mut payload, u);
 
+    hasher.update(&payload);
     let hash_result = hasher.finalize();
     Scalar::from_be_bytes_mod_order(&hash_result)
 }
 
 /// NIZK Prove (Prefix Disclosure: 0..disclosed_count-1 are public)
 pub fn nizk_prove_prefix<R: RngCore>(
+    pok_ctx: &[u8],
     params: &Params,
     pk: &PublicKey,
     messages: &Messages,
@@ -403,7 +422,7 @@ pub fn nizk_prove_prefix<R: RngCore>(
     let u = (c_j * alpha + a_bar * beta + u_term).into_affine();
 
     let disclosed_msgs = &messages.0[0..disclosed_count];
-    let challenge = compute_challenge_prefix(pk, disclosed_msgs, &a_bar, &b_bar, &u);
+    let challenge = compute_challenge_prefix(pok_ctx, pk, disclosed_msgs, &a_bar, &b_bar, &u);
 
     let s = alpha + r * challenge;
     let t = beta - signature.e * challenge;
@@ -426,6 +445,7 @@ pub fn nizk_prove_prefix<R: RngCore>(
 
 /// NIZK Verify (Prefix Disclosure)
 pub fn nizk_verify_prefix(
+    pok_ctx: &[u8],
     params: &Params,
     pk: &PublicKey,
     disclosed_msgs: &[Scalar],
@@ -437,7 +457,7 @@ pub fn nizk_verify_prefix(
     }
 
     let challenge =
-        compute_challenge_prefix(pk, disclosed_msgs, &proof.A_bar, &proof.B_bar, &proof.U);
+        compute_challenge_prefix(pok_ctx, pk, disclosed_msgs, &proof.A_bar, &proof.B_bar, &proof.U);
 
     let mut c_j = params.G1.into_group();
     for (j, &m_j) in disclosed_msgs.iter().enumerate() {

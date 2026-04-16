@@ -4,7 +4,7 @@ use ark_std::{test_rng, UniformRand};
 use bbs::bbs::{keygen as bbs_keygen, setup as bbs_setup, sign as bbs_sign, verify as bbs_verify};
 use bbs::extend::BBSPlusExtendedScheme;
 use bbs::extend_structs::{PartialSignature, UserCommitment};
-use bbs::pok::{nizk_prove_prefix, nizk_verify_prefix};
+use bbs::pok::{nizk_prove_prefix, nizk_verify_prefix, compute_challenge_prefix};
 use bbs::structs::{Messages, Params, PrivateKey, PublicKey, Signature};
 use ark_bn254::Fr as Scalar;
 use std::str::FromStr;
@@ -13,6 +13,7 @@ use serde::Serialize;
 use serde_wasm_bindgen::{from_value, to_value};
 use std::convert::TryInto;
 use wasm_bindgen::prelude::*;
+use web_sys::console;
 
 #[wasm_bindgen]
 pub fn init_panic_hook() {
@@ -115,6 +116,7 @@ pub fn verify(
 
 #[wasm_bindgen]
 pub fn pok_nizk_prove(
+    ctx: String,
     params_js: JsValue,
     pk_js: JsValue,
     messages_js: JsValue,
@@ -148,6 +150,7 @@ pub fn pok_nizk_prove(
         .map_err(|e: String| JsValue::from_str(&e))?;
 
     let proof = nizk_prove_prefix(
+        ctx.as_bytes(),
         &params,
         &pk,
         &messages,
@@ -163,6 +166,7 @@ pub fn pok_nizk_prove(
 
 #[wasm_bindgen]
 pub fn pok_nizk_verify(
+    ctx: String,
     params_js: JsValue,
     pk_js: JsValue,
     disclosed_msgs_js: JsValue,
@@ -192,7 +196,7 @@ pub fn pok_nizk_verify(
         .try_into()
         .map_err(|e: String| JsValue::from_str(&e))?;
 
-    Ok(nizk_verify_prefix(&params, &pk, &disclosed_msgs.0, &proof))
+    Ok(nizk_verify_prefix(ctx.as_bytes(), &params, &pk, &disclosed_msgs.0, &proof))
 }
 
 #[wasm_bindgen]
@@ -346,6 +350,7 @@ pub fn sign_debug(
 
 #[wasm_bindgen]
 pub fn pok_nizk_prove_debug(
+    ctx: String,
     params_js: JsValue,
     pk_js: JsValue,
     messages_js: JsValue,
@@ -379,6 +384,7 @@ pub fn pok_nizk_prove_debug(
         .map_err(|e: String| JsValue::from_str(&e))?;
 
     let proof = nizk_prove_prefix(
+        ctx.as_bytes(),
         &params,
         &pk,
         &messages,
@@ -388,8 +394,64 @@ pub fn pok_nizk_prove_debug(
     )
     .map_err(|e| JsValue::from_str(&format!("NIZK Prove failed: {}", e)))?;
 
+    let challenge = compute_challenge_prefix(
+        ctx.as_bytes(),
+        &pk,
+        &messages.0[0..disclosed_count],
+        &proof.A_bar,
+        &proof.B_bar,
+        &proof.U,
+    );
+    console::log_1(&format!("Challenge: {}", challenge).into());
+
     let proof_dto: utils::NonInteractiveProofPrefixJson = (&proof).into();
     to_value(&proof_dto).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+#[wasm_bindgen]
+pub fn signer_sign_debug(
+    sk_js: JsValue,
+    messages_js: JsValue,
+    params_js: JsValue,
+    user_commit_js: JsValue,
+) -> Result<JsValue, JsValue> {
+    let mut rng = test_rng();
+
+    let sk_dto: utils::PrivateKeyJson =
+        from_value(sk_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let sk: PrivateKey = (&sk_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
+
+    let msgs_dto: utils::MessagesJson =
+        from_value(messages_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let messages: Messages = (&msgs_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
+
+    let params_dto: utils::ParamsJson =
+        from_value(params_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let params: Params = (&params_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
+
+    let commit_dto: utils::UserCommitmentJson =
+        from_value(user_commit_js).map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let commit: UserCommitment = (&commit_dto)
+        .try_into()
+        .map_err(|e: String| JsValue::from_str(&e))?;
+
+    let partial_sig = BBSPlusExtendedScheme::signer_sign(
+        &mut rng,
+        &sk.x,
+        &messages.0,
+        &params.H,
+        &params.G1,
+        &commit.C2,
+    );
+
+    let partial_sig_dto: utils::PartialSignatureJson = (&partial_sig).into();
+    to_value(&partial_sig_dto).map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
 /// Sample random Scalar

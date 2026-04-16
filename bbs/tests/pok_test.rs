@@ -81,8 +81,11 @@ mod tests {
         disclosed_msgs.insert(1, msgs[1]);
         disclosed_msgs.insert(4, msgs[4]);
 
+        let ctx = "LestsVerify".as_bytes();
+
         // NIZK Prove
         let proof = nizk_prove(
+            ctx,
             &params,
             &pk,
             &messages,
@@ -93,7 +96,7 @@ mod tests {
         .unwrap();
 
         // NIZK Verify
-        let is_valid = nizk_verify(&params, &pk, &disclosed_msgs, &proof);
+        let is_valid = nizk_verify(ctx, &params, &pk, &disclosed_msgs, &proof);
         assert!(is_valid, "Non-Interactive PoK verification failed!");
     }
 
@@ -117,8 +120,10 @@ mod tests {
         let disclosed_count = 3;
         let disclosed_msgs = &msgs[0..disclosed_count];
 
+        let ctx = "LestsVerify".as_bytes();
         // NIZK Prove
         let proof = nizk_prove_prefix(
+            ctx,
             &params,
             &pk,
             &messages,
@@ -129,7 +134,7 @@ mod tests {
         .unwrap();
 
         // NIZK Verify
-        let is_valid = nizk_verify_prefix(&params, &pk, disclosed_msgs, &proof);
+        let is_valid = nizk_verify_prefix(ctx, &params, &pk, disclosed_msgs, &proof);
         assert!(is_valid, "Prefix Non-Interactive PoK verification failed!");
     }
 }
