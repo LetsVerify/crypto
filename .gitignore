@@ -4,3 +4,6 @@ temp
 
 # rust
 **/target
+
+# mac
+**/.DS_Store
