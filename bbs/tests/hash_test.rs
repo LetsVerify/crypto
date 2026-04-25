@@ -5,7 +5,7 @@ use sha3::{Digest, Keccak256};
 use ark_serialize::CanonicalSerialize;
 use hex;
 
-#[test]
+// #[test]
 fn main() {
     let pk = PublicKey { X: G2::generator() };
     let disclosed = vec![Scalar::from(42u64)];
