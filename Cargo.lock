@@ -240,25 +240,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bbs_wasm"
-version = "0.1.2"
-dependencies = [
- "ark-bn254",
- "ark-serialize",
- "ark-std",
- "bbs",
- "console_error_panic_hook",
- "getrandom",
- "hex",
- "rand",
- "serde",
- "serde-wasm-bindgen",
- "serde_json",
- "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
 name = "block-buffer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

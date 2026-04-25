@@ -116,7 +116,10 @@ pub fn verify(
 
 #[wasm_bindgen]
 pub fn pok_nizk_prove(
+<<<<<<< HEAD
     ctx: String,
+=======
+>>>>>>> origin/master
     params_js: JsValue,
     pk_js: JsValue,
     messages_js: JsValue,
@@ -150,7 +153,10 @@ pub fn pok_nizk_prove(
         .map_err(|e: String| JsValue::from_str(&e))?;
 
     let proof = nizk_prove_prefix(
+<<<<<<< HEAD
         ctx.as_bytes(),
+=======
+>>>>>>> origin/master
         &params,
         &pk,
         &messages,
@@ -166,7 +172,10 @@ pub fn pok_nizk_prove(
 
 #[wasm_bindgen]
 pub fn pok_nizk_verify(
+<<<<<<< HEAD
     ctx: String,
+=======
+>>>>>>> origin/master
     params_js: JsValue,
     pk_js: JsValue,
     disclosed_msgs_js: JsValue,

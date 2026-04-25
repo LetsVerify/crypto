@@ -41,6 +41,49 @@ pub fn g1_from_json(p: &G1Json) -> Result<G1, String> {
     let x = Fq::from_str(&p.x).map_err(|_| format!("Invalid x: {}", p.x))?;
     let y = Fq::from_str(&p.y).map_err(|_| format!("Invalid y: {}", p.y))?;
     Ok(G1::new_unchecked(x, y))
+#![allow(non_snake_case, dead_code)]
+
+use ark_bn254::{Fq, Fq2, Fr as Scalar, G1Affine as G1, G2Affine as G2};
+use bbs::structs::{Messages, Params, PrivateKey, PublicKey, Signature};
+use serde::{Deserialize, Serialize};
+use std::str::FromStr;
+
+pub fn set_panic_hook() {
+    // When the `console_error_panic_hook` feature is enabled, we can call the
+    // `set_panic_hook` function at least once during initialization, and then
+    // we will get better error messages if our code ever panics.
+    console_error_panic_hook::set_once();
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct G1Json {
+    pub x: String,
+    pub y: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Fq2Json {
+    pub c0: String,
+    pub c1: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct G2Json {
+    pub x: Fq2Json,
+    pub y: Fq2Json,
+}
+
+pub fn g1_to_json(p: &G1) -> G1Json {
+    G1Json {
+        x: p.x.to_string(),
+        y: p.y.to_string(),
+    }
+}
+
+pub fn g1_from_json(p: &G1Json) -> Result<G1, String> {
+    let x = Fq::from_str(&p.x).map_err(|_| format!("Invalid x: {}", p.x))?;
+    let y = Fq::from_str(&p.y).map_err(|_| format!("Invalid y: {}", p.y))?;
+    Ok(G1::new_unchecked(x, y))
 }
 
 pub fn fq2_to_json(p: &Fq2) -> Fq2Json {
