@@ -199,6 +199,7 @@ dependencies = [
  "ark-serialize",
  "ark-std",
  "criterion",
+ "hex",
  "serde",
  "serde_json",
  "sha3",
@@ -240,7 +241,7 @@ dependencies = [
 
 [[package]]
 name = "bbs_wasm"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "ark-bn254",
  "ark-serialize",
@@ -254,6 +255,7 @@ dependencies = [
  "serde-wasm-bindgen",
  "serde_json",
  "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

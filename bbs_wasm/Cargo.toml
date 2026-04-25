@@ -1,6 +1,6 @@
 [package]
 name = "bbs_wasm"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2024"
 
 [lib]
@@ -14,7 +14,7 @@ console_error_panic_hook = "0.1"
 getrandom = { version = "0.2", features = ["js"] }
 rand = "0.8"
 ark-serialize = "0.5.0"
-
+web-sys = { version = "0.3", features = ["console"] }
 bbs = { path = "../bbs" }
 ark-bn254 = "0.5.0"
 ark-std = "0.5.0"
