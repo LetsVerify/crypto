@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>BBS Wasm Benchmark</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        table { border-collapse: collapse; width: 80%; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>BBS Wasm Benchmark</h1>
+    <p>Open the console to view detailed logs. Benching for 5, 10, and 20 attributes.</p>
+    <div id="status">Loading Wasm and running benchmarks... (this may take a few seconds)</div>
+    
+    <table id="resultsTable" style="display:none;">
+        <thead>
+            <tr>
+                <th>Attributes</th>
+                <th>KeyGen (ms)</th>
+                <th>Issuance (Commit+Sign+Unblind) (ms)</th>
+                <th>Proof Generation (ms)</th>
+                <th>Proof Verification (ms)</th>
+            </tr>
+        </thead>
+        <tbody id="resultsBody"></tbody>
+    </table>
+
+    <script type="module">
+        import init, { 
+            setup_debug, 
+            keygen_debug, 
+            user_commit,
+            signer_sign_debug, 
+            user_unblind,
+            pok_nizk_prove_debug,
+            pok_nizk_verify
+        } from '../pkg/bbs_wasm.js';
+
+        async function runBenchmarks() {
+            await init();
+            console.log("Wasm initialized successfully. Starting Benchmarks...");
+            
+            const iterations = 50; // Number of loops to average
+            const testSizes = [5, 10, 20];
+            const tbody = document.getElementById('resultsBody');
+
+            for (const numPublicMessages of testSizes) {
+                console.log(`\n=== Benchmarking with ${numPublicMessages} public attributes ===`);
+                const totalMessages = numPublicMessages + 2; 
+
+                // --- Setup ---
+                const params = setup_debug(totalMessages);
+                const keys = keygen_debug();
+                
+                const m_null = "192837465"; 
+                const m_gamma = "987654321";
+                const lambda = "1122334455";
+                
+                const publicMessages = [];
+                for(let i=0; i<numPublicMessages; i++) {
+                    publicMessages.push("1464662865008959075347130388737553683672515905673906344791000457739484" + i);
+                }
+                const allMessages = [...publicMessages, m_null, m_gamma];
+                const disclosedCount = numPublicMessages + 1; // Disclose all public + m_null
+                const ctx = "LetsVerify";
+
+                // --- 1. KeyGen Benchmark ---
+                let t0 = performance.now();
+                for(let i=0; i<iterations; i++) keygen_debug();
+                let keygenTime = (performance.now() - t0) / iterations;
+
+                // --- 2. Issuance Benchmark (Commit + Sign + Unblind) ---
+                t0 = performance.now();
+                for(let i=0; i<iterations; i++) {
+                    const commit = user_commit(m_null, m_gamma, lambda, params);
+                    const partialSig = signer_sign_debug(keys.sk, publicMessages, params, commit);
+                    user_unblind(partialSig, lambda);
+                }
+                let issuanceTime = (performance.now() - t0) / iterations;
+
+                // Precompute full sig for proof benchmarks
+                const commit = user_commit(m_null, m_gamma, lambda, params);
+                const partialSig = signer_sign_debug(keys.sk, publicMessages, params, commit);
+                const fullSig = user_unblind(partialSig, lambda);
+
+                // --- 3. Proof Gen Benchmark ---
+                t0 = performance.now();
+                for(let i=0; i<iterations; i++) {
+                    pok_nizk_prove_debug(ctx, params, keys.pk, allMessages, fullSig, disclosedCount);
+                }
+                let proofGenTime = (performance.now() - t0) / iterations;
+
+                // Precompute proof for verify benchmark
+                const proof = pok_nizk_prove_debug(ctx, params, keys.pk, allMessages, fullSig, disclosedCount);
+                const disclosedMsgs = allMessages.slice(0, disclosedCount);
+
+                // --- 4. Proof Verify Benchmark ---
+                t0 = performance.now();
+                for(let i=0; i<iterations; i++) {
+                    pok_nizk_verify(ctx, params, keys.pk, disclosedMsgs, proof);
+                }
+                let proofVerifyTime = (performance.now() - t0) / iterations;
+
+                console.log(`KeyGen: ${keygenTime.toFixed(4)} ms`);
+                console.log(`Issuance: ${issuanceTime.toFixed(4)} ms`);
+                console.log(`Proof Gen: ${proofGenTime.toFixed(4)} ms`);
+                console.log(`Proof Verify: ${proofVerifyTime.toFixed(4)} ms`);
+
+                // Add to table
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${numPublicMessages}</td>
+                    <td>${keygenTime.toFixed(4)}</td>
+                    <td>${issuanceTime.toFixed(4)}</td>
+                    <td>${proofGenTime.toFixed(4)}</td>
+                    <td>${proofVerifyTime.toFixed(4)}</td>
+                `;
+                tbody.appendChild(tr);
+            }
+
+            document.getElementById('status').innerText = "Benchmarks completed!";
+            document.getElementById('resultsTable').style.display = "table";
+        }
+
+        runBenchmarks().catch(console.error);
+    </script>
+</body>
+</html>

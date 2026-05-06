@@ -26,3 +26,7 @@ path = "script/tools.rs"
 [[bin]]
 name = "hash_test"
 path = "script/hash_test.rs"
+
+[[bench]]
+name = "bbs_bench"
+harness = false

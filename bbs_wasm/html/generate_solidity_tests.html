@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Generate Solidity Test Data</title>
+    <style>
+        body { font-family: monospace; padding: 20px; font-size: 14px; }
+        .test-block { background-color: #f7f7f7; padding: 15px; margin-bottom: 30px; border: 1px solid #ddd; border-radius: 5px; }
+        .copy-btn { margin-bottom: 10px; cursor: pointer; padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 3px; }
+        .copy-btn:hover { background: #0056b3; }
+        pre { white-space: pre-wrap; word-wrap: break-word; margin: 0; }
+        h2 { margin-top: 0; border-bottom: 1px solid #ccc; padding-bottom: 5px; color: #333; }
+    </style>
+</head>
+<body>
+    <h1>Solidity Test Data Generator</h1>
+    <p>This page automatically generates setup parameters, keys, messages, and NIZK proofs for 5, 10, and 20 disclosed attributes, formatted precisely for Foundry / Solidity.</p>
+    <div id="output">Generating... Please wait.</div>
+
+    <script type="module">
+        import init, { 
+            init_panic_hook,
+            setup_debug, 
+            keygen_debug, 
+            user_commit,
+            signer_sign_debug, 
+            user_unblind,
+            pok_nizk_prove_debug
+        } from '../pkg/bbs_wasm.js';
+
+        // Helper to extract X and Y from G1 object
+        function formatG1(pt) {
+            let x = "0", y = "0";
+            if (Array.isArray(pt)) { x = pt[0]; y = pt[1]; }
+            else if (pt && pt.x !== undefined) { x = pt.x; y = pt.y; }
+            return `BBSMath.G1Point(${x}, ${y})`;
+        }
+
+        // Helper to extract G2 point
+        function formatG2(pt) {
+            let x0="0", x1="0", y0="0", y1="0";
+            if (pt && pt.x) {
+                if (Array.isArray(pt.x)) { x0 = pt.x[0]; x1 = pt.x[1]; }
+                if (Array.isArray(pt.y)) { y0 = pt.y[0]; y1 = pt.y[1]; }
+            }
+            return `BBSMath.G2Point({\n            x: [\n                ${x0},\n                ${x1}\n            ],\n            y: [\n                ${y0},\n                ${y1}\n            ]\n        })`;
+        }
+
+        function buildSolidityTest(size, bases, pk, messages, proof) {
+            let sol = `// ==========================================\n// Test Data for ${size} Disclosed Attributes\n// ==========================================\n\n`;
+            
+            // 1. bases setup
+            sol += `BBSMath.G1Point[] memory bases = new BBSMath.G1Point[](${bases.length});\n`;
+            bases.forEach((h, i) => {
+                sol += `bases[${i}] = ${formatG1(h)};\n`;
+            });
+            sol += `\n`;
+
+            // 2. pk
+            sol += `BBSMath.G2Point memory pk = ${formatG2(pk)};\n\n`;
+
+            // 3. messages
+            sol += `uint256[] memory messages = new uint256[](${messages.length});\n`;
+            messages.forEach((m, i) => {
+                sol += `messages[${i}] = ${m};\n`;
+            });
+            sol += `\n`;
+
+            // 4. proof
+            // Assume proof matches standard layout: A_bar, B_bar, U, s, t, u_gamma
+            let a_bar = proof.A_bar || proof[0];
+            let b_bar = proof.B_bar || proof[1];
+            let U = proof.U || proof[2];
+            let s = proof.s || proof[3];
+            let t = proof.t || proof[4];
+            let u_gamma = proof.u_i || proof[5];
+
+            sol += `BBSVerifier.Proof memory proof = BBSVerifier.Proof({\n`;
+            sol += `    A_bar: ${formatG1(a_bar)},\n`;
+            sol += `    B_bar: ${formatG1(b_bar)},\n`;
+            sol += `    U: ${formatG1(U)},\n`;
+            sol += `    s: ${s},\n`;
+            sol += `    t: ${t},\n`;
+            sol += `    u_gamma: ${u_gamma}\n`;
+            sol += `});\n`;
+
+            return sol;
+        }
+
+        async function run() {
+            await init();
+            init_panic_hook();
+            
+            const outputDiv = document.getElementById('output');
+            outputDiv.innerHTML = '';
+            
+            // Evaluate for 5, 10, 20 disclosed messages total (including m_null)
+            const testSizes = [5, 10, 20];
+            
+            for (const disclosedCount of testSizes) {
+                // To disclose 5 things, we need 4 constraints + 1 m_null
+                const numPublicMessages = disclosedCount - 1;
+                const totalMessages = numPublicMessages + 2; // + m_null + m_gamma
+
+                // Setup params & keys
+                const params = setup_debug(totalMessages);
+                const keys = keygen_debug();
+                
+                // Construct inputs
+                const m_null = "192837465"; 
+                const m_gamma = "987654321";
+                const lambda = "1122334455";
+                
+                const publicMessages = [];
+                for(let i=0; i<numPublicMessages; i++) {
+                    publicMessages.push("452875228514868401256425681846228077191882885254613874652120835441104425" + i.toString().padStart(4, '0'));
+                }
+                const allMessages = [...publicMessages, m_null, m_gamma];
+                
+                // Issue partial sig & unblind
+                const commit = user_commit(m_null, m_gamma, lambda, params);
+                const partialSig = signer_sign_debug(keys.sk, publicMessages, params, commit);
+                const fullSig = user_unblind(partialSig, lambda);
+
+                // Generate NIZK proof
+                const ctx = "LetsVerify";
+                const proof = pok_nizk_prove_debug(ctx, params, keys.pk, allMessages, fullSig, disclosedCount);
+
+                // Prepare output payload
+                const disclosedMsgs = allMessages.slice(0, disclosedCount);
+                
+                // Generate Solidity format string
+                const solString = buildSolidityTest(disclosedCount, params.H, keys.pk, disclosedMsgs, proof);
+                
+                // Render to DOM
+                const blockDiv = document.createElement('div');
+                blockDiv.className = 'test-block';
+                
+                const title = document.createElement('h2');
+                title.innerText = disclosedCount + " Attributes Test Data";
+                blockDiv.appendChild(title);
+                
+                const btn = document.createElement('button');
+                btn.className = 'copy-btn';
+                btn.innerText = 'Copy to Clipboard';
+                btn.onclick = () => {
+                    navigator.clipboard.writeText(solString);
+                    btn.innerText = 'Copied!';
+                    setTimeout(() => btn.innerText = 'Copy to Clipboard', 2000);
+                };
+                blockDiv.appendChild(btn);
+                
+                const pre = document.createElement('pre');
+                pre.innerText = solString;
+                blockDiv.appendChild(pre);
+                
+                outputDiv.appendChild(blockDiv);
+            }
+        }
+
+        run().catch(console.error);
+    </script>
+</body>
+</html>

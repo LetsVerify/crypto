@@ -84,7 +84,10 @@
                 // Disclose constraints + m_null
                 const disclosedCount = numPublicMessages + 1;
                 const ctx = "LetsVerify";
+                let current = performance.now();
                 const proof = pok_nizk_prove_debug(ctx, params, keys.pk, allMessages, fullSig, disclosedCount);
+                let elapsed = performance.now() - current;
+                console.log(`Proof generation took ${elapsed.toFixed(2)} ms`);
                 console.log(`Proof generated. Disclosed ${disclosedCount} messages (m_gamma is hidden).`);
                 console.log("Proof Object:", proof);
 
@@ -92,7 +95,10 @@
                 console.log("\n=== 6. Verifier Validate Proof ===");
                 const disclosedMsgs = allMessages.slice(0, disclosedCount);
                 console.log("Verifier checking disclosed msgs:", disclosedMsgs);
+                let verifyStart = performance.now();
                 const isProofValid = pok_nizk_verify(ctx, params, keys.pk, disclosedMsgs, proof);
+                let verifyElapsed = performance.now() - verifyStart;
+                console.log(`Proof verification took ${verifyElapsed.toFixed(2)} ms`);
                 console.log("PoK Verify result:", isProofValid);
 
                 if (isSigValid && isProofValid) {
